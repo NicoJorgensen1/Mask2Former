@@ -5,3 +5,6 @@ timm
 h5py
 submitit
 scikit-image
+natsort
+optuna
+opencv-python
