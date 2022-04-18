@@ -51,3 +51,6 @@ _darcs
 /projects/*/datasets
 /models
 /snippet
+
+# My own
+*/model_checkpoints/*
