@@ -13,7 +13,7 @@ from detectron2.structures import BoxMode
 from detectron2.utils.visualizer import Visualizer
 
 # Create dictionary to store the class names and IDs 
-class_labels = {key: val for key,val in enumerate(["Background", "Well", "Zona", "Perivitelline space", "Cell", "PN"])}
+class_labels = {key: val for key,val in enumerate(["Well", "Zona", "Perivitelline space", "Cell", "PN"])}
 
 # Function to select sample dictionaries with unique PN's
 def pickSamplesWithUniquePN(dataset_dict):

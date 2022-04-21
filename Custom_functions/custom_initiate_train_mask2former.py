@@ -33,6 +33,14 @@ from custom_image_batch_visualize_func import visualize_the_images              
 from custom_HPO_func import perform_HPO                                                                 # Function to perform HPO and read the input variables
 
 
+
+#### Modify the function that will allow for displaying learning curves
+#### Create function to visualize an image batch with predicted outputs 
+#### Create a new function to compute confusion matrixes. The values might as well be the AP@50 of each class. Visualize using the custom_conf_matrix_visualization_func script 
+#### Modify this initiate_train script in order to complete the training after performing HPO 
+
+
+
 # Get the FLAGS, the config and the logfile. 
 FLAGS, cfg, trial, log_file = perform_HPO()                                                             # Perform HPO if that is chosen 
 printAndLog(input_to_write="FLAGS input arguments:", logs=log_file)                                     # Print the new, updated FLAGS ...
