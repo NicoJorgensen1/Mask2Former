@@ -1,3 +1,0 @@
-TRAINING INITIATED AT 14:17 21-APR-2022
-
-Using GPU: 0 with 3327MB available memory

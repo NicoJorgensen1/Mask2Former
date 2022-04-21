@@ -56,7 +56,7 @@ def save_dictionary(dictObject, save_folder, dictName):                         
 
 # Write the new config as a .yaml file
 def write_config_to_file(config):
-    with open(os.path.join(config.OUTPUT_DIR, "config_file"), "w") as f:                # Open a object instance with the config file
+    with open(os.path.join(config.OUTPUT_DIR, "config_file"), "wb") as f:               # Open a object instance with the config file
         f.write(config.dump())                                                          # Dump the configuration to a file named config_name in cfg.OUTPUT_DIR
     f.close()                                                                           # Close the writer handle again 
 
@@ -112,11 +112,11 @@ parser.add_argument("--backbone_multiplier", type=float, default=0.25, help="The
 parser.add_argument("--weight_decay", type=float, default=1e-4, help="The weight decay used for the model. Default: 1e-4")
 parser.add_argument("--min_delta", type=float, default=5e-4, help="The minimum improvement the model must have made in order to be accepted as an actual improvement. Default 5e-4")
 parser.add_argument("--ignore_background", type=str2bool, default=False, help="Whether or not we are ignoring the background class. True = Ignore background, False = reward/penalize for background predictions. Default: False")
-parser.add_argument("--crop_enabled", type=str2bool, default=True, help="Whether or not cropping is allowed on the images. Default: True")
+parser.add_argument("--crop_enabled", type=str2bool, default=False, help="Whether or not cropping is allowed on the images. Default: False")
 parser.add_argument("--hp_optim", type=str2bool, default=True, help="Whether or not we are initiating the training with a hyperparameter optimization. Default: True")
 parser.add_argument("--inference_only", type=str2bool, default=False, help="<< Currently not supported >> Whether or not training is skipped and only inference is run. This input argument deprecates the '--eval_only' argument. Default: False")
 parser.add_argument("--display_images", type=str2bool, default=False, help="Whether or not some random sample images are displayed before training starts. Default: False")
-parser.add_argument("--use_transformer_backbone", type=str2bool, default=True, help="Whether or not we are using the extended swin_small_transformer backbone. Only applicable if '--use_per_pixel_baseline'=False. Default: True")
+parser.add_argument("--use_transformer_backbone", type=str2bool, default=False, help="Whether or not we are using the extended swin_small_transformer backbone. Only applicable if '--use_per_pixel_baseline'=False. Default: True")
 parser.add_argument("--debugging", type=str2bool, default=False, help="Whether or not we are debugging the script. Default: False")
 # Parse the arguments into a Namespace variable
 FLAGS = parser.parse_args()

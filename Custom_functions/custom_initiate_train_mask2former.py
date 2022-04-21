@@ -30,7 +30,7 @@ from custom_print_and_log_func import printAndLog                               
 from custom_analyze_model_func import analyze_model_func                                                # Analyze the model FLOPS, number of parameters and activations computed
 from custom_training_func import objective_train_func                                                   # Function to launch the training with the given dataset
 from custom_image_batch_visualize_func import visualize_the_images                                      # Functions visualize the image batch
-from custom_HPO_funct import perform_HPO                                                                # Function to perform HPO and read the input variables
+from custom_HPO_func import perform_HPO                                                                 # Function to perform HPO and read the input variables
 
 
 # Get the FLAGS, the config and the logfile. 

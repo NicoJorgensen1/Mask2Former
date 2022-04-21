@@ -20,7 +20,6 @@ from detectron2.solver.lr_scheduler import LRMultiplier
 from fvcore.common.param_scheduler import CosineParamScheduler
 from fvcore.nn.precise_bn import get_bn_modules
 from detectron2.engine.hooks import PeriodicWriter
-from custom_evaluation_func import Instance_Evaluator
 
 
 # Define a function that will return a list of augmentations to use for training
@@ -61,8 +60,7 @@ class CosineParamScheduler2(CosineParamScheduler):
 class My_GoTo_Trainer(DefaultTrainer):
     @classmethod
     def build_evaluator(cls, cfg, dataset_name, output_folder=None):
-        # return Instance_Evaluator         # Insert my custom one here, when it is finished ... 
-        return InstanceSegEvaluator 
+        return None  
 
     @classmethod
     def build_train_loader(cls, cfg):

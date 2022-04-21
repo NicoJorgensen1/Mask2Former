@@ -100,7 +100,7 @@ def changeConfig_withFLAGS(cfg, FLAGS):
         cfg.INPUT.MAX_SIZE_TEST = 500                                                               # The maximum size length for one side of the validation images
     cfg.INPUT.CROP.ENABLED =  FLAGS.crop_enabled                                                    # Whether or not cropping of input images are allowed 
     cfg.INPUT.FORMAT = "BGR"                                                                        # The input format is set to be BGR, like the visualization method
-    cfg.INPUT.MIN_SIZE_TRAIN_SAMPLING = "random"                                                    # Random sampling of the input images 
+    cfg.INPUT.MIN_SIZE_TRAIN_SAMPLING = "choice"                                                    # Random sampling of the input images 
 
     # Output values
     cfg.OUTPUT_DIR = os.path.join(Mask2Former_dir, "output_{:s}{:s}".format("vitrolife_" if "vitro" in FLAGS.dataset_name.lower() else "", FLAGS.output_dir_postfix))   # Get Mask2Former directory and name the output directory
@@ -113,6 +113,7 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     # Debugging value changes
     if FLAGS.debugging==True:                                                                       # If we are debugging the model ...
         cfg.SOLVER.WEIGHT_DECAY = float(0)                                                          # ... we don't want any weight decay
+
 
     # Change the config and add the FLAGS input arguments one by one ... Not pretty, but efficient and doesn't cost memory...
     cfg.custom_key = []

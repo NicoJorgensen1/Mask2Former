@@ -45,12 +45,13 @@ def object_func(trial):
     new_best = float("nan")
     it_count = 0
     while np.isnan(new_best):                                                                       # Sometimes the iteration fails for some reason. We'll allow 3 attempts before skipping and moving on
-        try:
-            new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=["this is an empty list"], hyperparameter_optimization=True)
-        except Exception as ex:
-            error_str = "An exception of type {0} occured. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
-            printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
-            new_best = float("nan")
+        new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=["this is an empty list"], hyperparameter_optimization=True)
+        # try:
+            # new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=["this is an empty list"], hyperparameter_optimization=True)
+        # except Exception as ex:
+        #     error_str = "An exception of type {0} occured. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
+        #     printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
+        #     new_best = float("nan")
         it_count += 1
         if it_count >= 3:
             printAndLog(input_to_write="", logs=log_file, print_str=False)
@@ -73,7 +74,7 @@ def object_func(trial):
 
 
 FLAGS, cfg, log_file = setup_func()                                                                 # Get the FLAGS, config and log_file 
-MaskFormer_dir = [x for x in sys_PATH if x.endswith("MaskFormer")][0]                               # Get the path of the MaskFormer directory
+Mask2Former_dir = [x for x in sys_PATH if x.endswith("Mask2Former")][0]                             # Get the path of the MaskFormer directory
 HPO_start = time()                                                                                  # Set the time for the start of the HPO 
 def perform_HPO():                                                                                  # The function that will perform the HPO
     trial = None                                                                                    # Initiate the trial as a None variable in order to return it if no HPO is performed
@@ -89,7 +90,7 @@ def perform_HPO():                                                              
                         catch=(MemoryError, RuntimeError, TypeError, ValueError, ZeroDivisionError), gc_after_trial=True)
         trial = study.best_trial 
         best_params = trial.params 
-        SaveHistory(historyObject=best_params, save_folder=cfg.OUTPUT_DIR, historyName="best_HPO_params")
+        save_dictionary(dictObject=best_params, save_folder=cfg.OUTPUT_DIR, dictName="best_HPO_params")
         printAndLog(input_to_write="Hyperparameter optimization completed.\nBest {:s}: {:.3f}".format(FLAGS.eval_metric, trial.value), logs=log_file, prefix="\n")
         printAndLog(input_to_write="Best hyperparameters: ".ljust(25), logs=log_file)
         printAndLog(input_to_write={key: best_params[key] for key in sorted(best_params.keys(), reverse=True)}, logs=log_file, prefix="", postfix="\n", length=15)
@@ -121,7 +122,7 @@ def perform_HPO():                                                              
         
         # Plot the results. Some problems have occured earlier, thus all plots are wrapped in try-except loops...
         HPO_fig_folder = os.path.join(cfg.OUTPUT_DIR, "Visualizations", "HPO_figures")
-        params_to_use = ["learning_rate", "dropout", "weight_decay"] if "nico" in MaskFormer_dir.lower() else None
+        params_to_use = ["learning_rate", "mask_loss_weight", "weight_decay"] if "nico" in Mask2Former_dir.lower() else None
         os.makedirs(HPO_fig_folder, exist_ok=True) 
         try:
             contour_axes = optuna.visualization.matplotlib.plot_contour(study, params=params_to_use, target_name=FLAGS.eval_metric)
