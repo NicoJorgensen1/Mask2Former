@@ -40,7 +40,7 @@ def str2bool(v):
 def getBestEpochResults(history, best_epoch):
     val_to_keep = {}
     best_epoch_idx = np.max(np.argwhere(np.isin(history["val_epoch_num"], best_epoch)))
-    keys_to_use = sorted([x for x in history.keys() if all(["val" in x, "_C" not in x, "_"!=x[-3], "_"!=x[-2]]) and any([y in x for y in ["SQ", "RQ", "PQ", "IoU", "ACC", "loss"]])], key=str.lower)
+    keys_to_use = sorted([x for x in history.keys() if all(["val" in x, "_C" not in x, "_"!=x[-3], "_"!=x[-2]]) and any([y in x for y in ["IoU", "ACC", "loss"]])], key=str.lower)
     for key in keys_to_use:
         if "loss" in key: val_to_keep[key] = history[key][best_epoch_idx]
         if "loss" not in key: val_to_keep[key] = history[key][best_epoch-1]
@@ -86,18 +86,18 @@ parser = default_argument_parser()
 start_time = datetime.now().strftime("%H_%M_%d%b%Y").upper()
 parser.add_argument("--dataset_name", type=str, default="vitrolife", help="Which datasets to train on. Choose between [ADE20K, Vitrolife]. Default: Vitrolife")
 parser.add_argument("--output_dir_postfix", type=str, default=start_time, help="Filename extension to add to the output directory of the current process. Default: now: 'HH_MM_DDMMMYYYY'")
-parser.add_argument("--eval_metric", type=str, default="val_mIoU", help="Metric to use in order to determine the 'best' model weights. Available: val_/train_ prefix to [total_loss, mIoU, fwIoU, mACC, PQ, RQ, SQ]. Default: val_fwIoU")
+parser.add_argument("--eval_metric", type=str, default="val_mIoU", help="Metric to use in order to determine the 'best' model weights. Available: val_/train_ prefix to [total_loss, mIoU, fwIoU, mACC]. Default: val_fwIoU")
 parser.add_argument("--optimizer_used", type=str, default="ADAMW", help="Optimizer to use. Available [SGD, ADAMW]. Default: ADAMW")
 parser.add_argument("--num_workers", type=int, default=6, help="Number of workers to use for training the model. Default: 4")
 parser.add_argument("--max_iter", type=int, default=int(1e5), help="Maximum number of iterations to train the model for. <<Deprecated argument. Use 'num_epochs' instead>>. Default: 100000")
 parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of the feature extracting ResNet backbone. Possible values: [18,34,50,101] Default: 101")
 parser.add_argument("--batch_size", type=int, default=1, help="The batch size used for training the model. Default: 1")
 parser.add_argument("--num_images", type=int, default=6, help="The number of images to display/segment. Default: 6")
-parser.add_argument("--num_trials", type=int, default=1000, help="The number of trials to run HPO for. Only relevant if '--hp_optim==True'. Default: 300")
+parser.add_argument("--num_trials", type=int, default=2, help="The number of trials to run HPO for. Only relevant if '--hp_optim==True'. Default: 300")
 parser.add_argument("--num_random_trials", type=int, default=100, help="The number of random trials to run initiate the HPO for. Only relevant if '--hp_optim==True'. Default: 30")
 parser.add_argument("--display_rate", type=int, default=5, help="The epoch_rate of how often to display image segmentations. A display_rate of 3 means that every third epoch, visual segmentations are saved. Default: 5")
 parser.add_argument("--gpus_used", type=int, default=1, help="The number of GPU's to use for training. Only applicable for training with ADE20K. This input argument deprecates the '--num-gpus' argument. Default: 1")
-parser.add_argument("--num_epochs", type=int, default=75, help="The number of epochs to train the model for. Default: 1")
+parser.add_argument("--num_epochs", type=int, default=2, help="The number of epochs to train the model for. Default: 1")
 parser.add_argument("--warm_up_epochs", type=int, default=5, help="The number of epochs to warm up the learning rate when training. Will go from 1/100 '--learning_rate' to '--learning_rate' during these warm_up_epochs. Default: 3")
 parser.add_argument("--patience", type=int, default=5, help="The number of epochs to accept that the model hasn't improved before lowering the learning rate by a factor '--lr_gamma'. Default: 5")
 parser.add_argument("--early_stop_patience", type=int, default=13, help="The number of epochs to accept that the model hasn't improved before terminating training. Default: 12")

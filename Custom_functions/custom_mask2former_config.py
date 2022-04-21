@@ -89,6 +89,7 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     # Dataloader values 
     cfg.DATALOADER.ASPECT_RATIO_GROUPING = False                                                    # We'll simply shuffle the input data, we won't group them after aspect ratios, even though that would be more GPU efficient
     cfg.DATALOADER.NUM_WORKERS = FLAGS.num_workers                                                  # Set the number of workers to only 2
+    cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS = False                                                 # Include all images, even the ones without any objects (which is none in the Vitrolife dataset)
 
     # Input values 
     if "vitrolife" in FLAGS.dataset_name.lower():

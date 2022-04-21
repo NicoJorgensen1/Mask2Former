@@ -4,52 +4,23 @@ try:
     warnings.filterwarnings('ignore', category=ShapelyDeprecationWarning)
 except:
     pass
-
 import copy
 import itertools
-import logging
-import os
-
-from collections import OrderedDict
-from typing import Any, Dict, List, Set
-
 import torch
-
-import detectron2.utils.comm as comm
-from detectron2.checkpoint import DetectionCheckpointer
-from detectron2.config import get_cfg
+import numpy as np 
+from typing import Any, Dict, List, Set
+from PIL import Image 
+from mask2former import MaskFormerInstanceDatasetMapper, InstanceSegEvaluator
+from detectron2.utils import comm
 from detectron2.data import MetadataCatalog, build_detection_train_loader
-from detectron2.engine import (
-    DefaultTrainer,
-    default_argument_parser,
-    default_setup,
-    launch,
-)
-from detectron2.evaluation import (
-    CityscapesInstanceEvaluator,
-    CityscapesSemSegEvaluator,
-    COCOEvaluator,
-    COCOPanopticEvaluator,
-    DatasetEvaluators,
-    LVISEvaluator,
-    SemSegEvaluator,
-    verify_results,
-)
-from detectron2.projects.deeplab import add_deeplab_config, build_lr_scheduler
+from detectron2.data import transforms as T
+from detectron2.engine import DefaultTrainer, hooks 
 from detectron2.solver.build import maybe_add_gradient_clipping
-from detectron2.utils.logger import setup_logger
-
-# MaskFormer
-from mask2former import (
-    COCOInstanceNewBaselineDatasetMapper,
-    COCOPanopticNewBaselineDatasetMapper,
-    InstanceSegEvaluator,
-    MaskFormerInstanceDatasetMapper,
-    MaskFormerPanopticDatasetMapper,
-    MaskFormerSemanticDatasetMapper,
-    SemanticSegmentorWithTTA,
-    add_maskformer2_config,
-)
+from detectron2.solver.lr_scheduler import LRMultiplier
+from fvcore.common.param_scheduler import CosineParamScheduler
+from fvcore.nn.precise_bn import get_bn_modules
+from detectron2.engine.hooks import PeriodicWriter
+from custom_evaluation_func import Instance_Evaluator
 
 
 # Define a function that will return a list of augmentations to use for training
@@ -67,7 +38,8 @@ def custom_augmentation_mapper(config, is_train=True):
             T.RandomFlip(prob=0.25, horizontal=False, vertical=True),       # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomLighting  
             T.RandomCrop("relative", (0.75, 0.75)),                         # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomCrop
             T.Resize((500,500), Image.BILINEAR)]                            # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.Resize
-    custom_mapper = MaskFormerSemanticDatasetMapper(config, is_train=is_train, augmentations=transform_list)    # Create the mapping from data dictionary to augmented training image
+    custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=is_train, augmentations=transform_list)    # Create the mapping from data dictionary to augmented training image
+    # Something has to be done to the bounding boxes before this mapper can be used ... 
     return custom_mapper
 
 
@@ -89,7 +61,8 @@ class CosineParamScheduler2(CosineParamScheduler):
 class My_GoTo_Trainer(DefaultTrainer):
     @classmethod
     def build_evaluator(cls, cfg, dataset_name, output_folder=None):
-        return None 
+        # return Instance_Evaluator         # Insert my custom one here, when it is finished ... 
+        return InstanceSegEvaluator 
 
     @classmethod
     def build_train_loader(cls, cfg):
@@ -195,17 +168,6 @@ class My_GoTo_Trainer(DefaultTrainer):
         if not cfg.SOLVER.CLIP_GRADIENTS.CLIP_TYPE == "full_model":
             optimizer = maybe_add_gradient_clipping(cfg, optimizer)
         return optimizer
-
-    @classmethod
-    def test_with_TTA(cls, cfg, model):
-        logger = logging.getLogger("detectron2.trainer")
-        # In the end of training, run an evaluation with TTA.
-        logger.info("Running inference with test-time augmentation ...")
-        model = SemanticSegmentorWithTTA(cfg, model)
-        evaluators = [cls.build_evaluator(cfg, name, output_folder=os.path.join(cfg.OUTPUT_DIR, "inference_TTA")) for name in cfg.DATASETS.TEST]
-        res = cls.test(cfg, model, evaluators)
-        res = OrderedDict({k + "_TTA": v for k, v in res.items()})
-        return res
 
 
     def build_hooks(self):

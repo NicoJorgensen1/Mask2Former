@@ -114,7 +114,7 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
                         "image_custom_info": row}                                                   # Add all the info from the current row to the dataset
         img_mask_pair_list.append(current_pair)                                                     # Append the dictionary for the current pair to the list of images for the given dataset
         count += 1                                                                                  # Increase the sample counter 
-        # if count > 15: break
+        if count > 15: break
     assert len(img_mask_pair_list) >= 1, print("No image/mask pairs found in {:s} subfolders 'raw_image' and 'masks'".format(vitrolife_dataset_filepath))
     img_mask_pair_list = natsorted(img_mask_pair_list)                                              # Sorting the list assures the same every time this function runs
     if debugging==True: img_mask_pair_list=pickSamplesWithUniquePN(img_mask_pair_list)              # If we are debugging, we'll only get one sample with each number of PN's 

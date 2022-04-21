@@ -8,14 +8,13 @@ from detectron2.utils import comm                                               
 from detectron2.utils.logger import setup_logger                                                            # Setup the logger that will perform logging of events
 from custom_Trainer_class import My_GoTo_Trainer                                                            # To instantiate the Trainer class
 from custom_image_batch_visualize_func import putModelWeights                                               # Assign the latest model checkpoint to the config model.weights 
-from custom_mask2former_setup_func import SaveHistory, printAndLog                                          # Save history_dict, log results
+from custom_mask2former_setup_func import save_dictionary, printAndLog                                      # Save history_dict, log results
 from custom_mask2former_config import createVitrolifeConfiguration, changeConfig_withFLAGS                  # Create the config used for hyperparameter optimization 
-# from custom_image_batch_visualize_func import visualize_the_images                                          # Functions visualize the image batch
+from custom_image_batch_visualize_func import visualize_the_images                                          # Functions visualize the image batch
 # from show_learning_curves import show_history, combineDataToHistoryDictionaryFunc                           # Function used to plot the learning curves for the given training and to add results to the history dictionary
 # from custom_evaluation_func import evaluateResults                                                          # Function to evaluate the metrics for the segmentation
 from custom_callback_functions import early_stopping, lr_scheduler, keepAllButLatestAndBestModel, updateLogsFunc    # Callback functions for model training
-# from custom_pq_eval_func import pq_evaluation                                                               # Used to perform the panoptic quality evaluation on the semantic segmentation results
-from visualize_conf_matrix import plot_confusion_matrix                                                     # Function to plot the available confusion matrixes
+from custom_conf_matrix_visualization import plot_confusion_matrix                                          # Function to plot the available confusion matrixes
 
 
 # Run the training function 
@@ -52,7 +51,6 @@ def launch_custom_training(FLAGS, config, dataset, epoch=0, run_mode="train", hy
         os.path.join(config.OUTPUT_DIR, "model_epoch_{:d}.pth".format(epoch+1)))                            # ... where X is the current epoch number    
     [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if all(["model_" in x, "epoch" not in x, x.endswith(".pth")])]    # Remove all irrelevant models
     return config
-
 
 
 # Define a function to create the hyper parameters of the trials
@@ -123,7 +121,6 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     new_best = np.inf if train_mode=="min" else -np.inf                                                     # Initiate the original "best_value" as either infinity or -infinity according to train_mode
     best_epoch = 0                                                                                          # Initiate the best epoch as being epoch_0, i.e. before doing any model training
     eval_train_results = {"sem_seg": []}                                                                    # Set the training evaluation results as an empty dictionary 
-    train_pq_results = {}                                                                                   # Set training PQ results to be an empty dictionary
     conf_matrix_train, conf_matrix_val, conf_matrix_test = None, None, None                                 # Initialize the confusion matrixes as None values 
     train_dataset = cfg.DATASETS.TRAIN                                                                      # Get the training dataset name
     val_dataset = cfg.DATASETS.TEST                                                                         # Get the validation dataset name
@@ -142,16 +139,14 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             if FLAGS.inference_only==False:
                 config = launch_custom_training(FLAGS=FLAGS, config=config, dataset=train_dataset, epoch=epoch, run_mode="train", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
                 eval_train_results, train_loader, train_evaluator, conf_matrix_train = evaluateResults(FLAGS, config, data_split="train", dataloader=train_loader, evaluator=train_evaluator, hp_optim=hyperparameter_optimization) # Evaluate the result on the training set
-                train_pq_results = pq_evaluation(args=FLAGS, config=config, data_split="train", hp_optim=hyperparameter_optimization)   # Evaluate the Panoptic Quality for the training semantic segmentation results  
             
             # Validation period. Will 'train' with lr=0 on validation data, correct the metrics files and evaluate performance on validation data
             config = launch_custom_training(FLAGS=FLAGS, config=config, dataset=val_dataset, epoch=epoch, run_mode="val", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
             eval_val_results, val_loader, val_evaluator, conf_matrix_val = evaluateResults(FLAGS, config, data_split="val", dataloader=val_loader, evaluator=val_evaluator) # Evaluate the result metrics on the training set
-            val_pq_results = pq_evaluation(args=FLAGS, config=config, data_split="val")                     # Evaluate the Panoptic Quality for the validation semantic segmentation results
             
             # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results
             history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results["sem_seg"], # Create and save the learning curves ...
-                metrics_eval=eval_val_results["sem_seg"], history=history, pq_train=train_pq_results, pq_val=val_pq_results)    # ... including all training and validation metrics
+                        metrics_eval=eval_val_results["sem_seg"], history=history)                          # ... including all training and validation metrics
             SaveHistory(historyObject=history, save_folder=config.OUTPUT_DIR)                               # Save the history dictionary after each epoch
             [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
             if np.mod(np.add(epoch,1), FLAGS.display_rate) == 0 and hyperparameter_optimization==False:     # Every 'display_rate' epochs, the model will segment the same images again ...
@@ -182,8 +177,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
         config.DATASETS.TEST = ("vitrolife_dataset_test",)                                                  # The inference will be done on the test dataset
         eval_test_results,_,_,conf_matrix_test = evaluateResults(FLAGS, config, data_split="test")          # Evaluate the result metrics on the validation set with the best performing model
         _ = plot_confusion_matrix(config=config, conf_train=conf_matrix_train, conf_val=conf_matrix_val, conf_test=conf_matrix_test, done_training=True)
-        test_pq_results = pq_evaluation(args=FLAGS, config=config, data_split="test")                       # Evaluate the Panoptic Quality for the test semantic segmentation results
-        history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_test_results["sem_seg"], pq_metrics=test_pq_results, data_split="test")
+        history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_test_results["sem_seg"], data_split="test")
         for key in history_test.keys():                                                                     # Iterate over all the keys in the history dictionary
             if "test" in key: test_history[key] = history_test[key][-1]                                     # If "test" is in the key, assign the value to the test_dictionary 
 
