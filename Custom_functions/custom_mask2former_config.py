@@ -64,6 +64,7 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     cfg.MODEL.MASK_FORMER.TEST.OVERLAP_THRESHOLD = float(0.25)                                      # The threshold for overlapping masks. Default to 0.80 
     cfg.MODEL.MASK_FORMER.TEST.PANOPTIC_ON = False                                                  # Disable the panoptic head for the maskformer 
     cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES = FLAGS.num_queries                                    # The number of queries to detect from the Transformer module 
+    cfg.MODEL.MASK_FORMER.SIZE_DIVISIBILITY = 10                                                    # The size of the images will be padded to be in an equal division of 10 
     cfg.MODEL.PANOPTIC_FPN.COMBINE.ENABLED = False                                                  # Always disable the panoptic FPN head 
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512                                                  # The ROI head proposals per image 
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.50                                                    # Assign the IoU threshold used for the model
@@ -99,6 +100,7 @@ def changeConfig_withFLAGS(cfg, FLAGS):
         cfg.INPUT.MIN_SIZE_TEST = 500                                                               # The minimum size length for one side of the validation images
         cfg.INPUT.MAX_SIZE_TEST = 500                                                               # The maximum size length for one side of the validation images
     cfg.INPUT.CROP.ENABLED =  FLAGS.crop_enabled                                                    # Whether or not cropping of input images are allowed 
+    cfg.INPUT.SIZE_DIVISIBILITY = 500                                                               # The inputs are all 500x500 pixels 
     cfg.INPUT.FORMAT = "BGR"                                                                        # The input format is set to be BGR, like the visualization method
     cfg.INPUT.MIN_SIZE_TRAIN_SAMPLING = "choice"                                                    # Random sampling of the input images 
 

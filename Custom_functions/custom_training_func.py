@@ -11,14 +11,13 @@ from custom_image_batch_visualize_func import putModelWeights                   
 from custom_mask2former_setup_func import save_dictionary, printAndLog                                      # Save history_dict, log results
 from custom_mask2former_config import createVitrolifeConfiguration, changeConfig_withFLAGS                  # Create the config used for hyperparameter optimization 
 from custom_image_batch_visualize_func import visualize_the_images                                          # Functions visualize the image batch
-# from show_learning_curves import show_history, combineDataToHistoryDictionaryFunc                           # Function used to plot the learning curves for the given training and to add results to the history dictionary
+from custom_display_learning_curves_func import show_history, combineDataToHistoryDictionaryFunc          # Function used to plot the learning curves for the given training and to add results to the history dictionary
 from custom_evaluation_func import evaluateResults                                                          # Function to evaluate the metrics for the segmentation
 from custom_callback_functions import early_stopping, lr_scheduler, keepAllButLatestAndBestModel, updateLogsFunc    # Callback functions for model training
-from custom_conf_matrix_visualization import plot_confusion_matrix                                          # Function to plot the available confusion matrixes
 
 
 # Run the training function 
-def run_train_func(cfg, run_mode):
+def run_train_func(cfg):
     setup_logger(output=cfg.OUTPUT_DIR, distributed_rank=comm.get_rank(), name="mask_former")               # Setup a logger for the mask module
     Trainer = My_GoTo_Trainer(cfg)
     Trainer.resume_or_load(resume=False)
@@ -34,7 +33,6 @@ def launch_custom_training(FLAGS, config, dataset, epoch=0, run_mode="train", hy
         elif "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 1/10)  # ... few thousand samples to accomplish anything
     if "val" in run_mode and "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(np.ceil(np.divide(FLAGS.epoch_iter, 4)))
     config.SOLVER.CHECKPOINT_PERIOD = config.SOLVER.MAX_ITER                                                # Save a new model checkpoint after each epoch
-
     if "train" in run_mode and hyperparameter_opt==False:                                                   # If we are training ... 
         for idx, item in enumerate(config.custom_key[::-1]):                                                # Iterate over the custom keys in reversed order
             if "epoch_num" in item[0]:                                                                      # If the current item is the tuple with the epoch_number
@@ -44,7 +42,7 @@ def launch_custom_training(FLAGS, config, dataset, epoch=0, run_mode="train", hy
     if "val" in run_mode.lower(): config.SOLVER.BASE_LR = float(0)                                          # If we are on the validation split set the learning rate to 0
     else: config.SOLVER.BASE_LR = FLAGS.learning_rate                                                       # Else, we are on the training split, so assign the latest saved learning rate to the config
     config.DATASETS.TRAIN = dataset                                                                         # Change the config dataset used to the dataset sent along ...
-    run_train_func(cfg=config, run_mode=run_mode)                                                           # Run the training for the current epoch
+    run_train_func(cfg=config)                                                                              # Run the training for the current epoch
     shutil.copyfile(os.path.join(config.OUTPUT_DIR, "metrics.json"),                                        # Rename the metrics.json to "run_mode"_metricsX.json ...
         os.path.join(config.OUTPUT_DIR, run_mode+"_metrics_{:d}.json".format(epoch+1)))                     # ... where X is the current epoch number
     os.remove(os.path.join(config.OUTPUT_DIR, "metrics.json"))                                              # Remove the original metrics file
@@ -121,8 +119,6 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     train_mode = "min" if "loss" in FLAGS.eval_metric else "max"                                            # Compute the mode of which the performance should be measured. Either a negative or a positive value is better
     new_best = np.inf if train_mode=="min" else -np.inf                                                     # Initiate the original "best_value" as either infinity or -infinity according to train_mode
     best_epoch = 0                                                                                          # Initiate the best epoch as being epoch_0, i.e. before doing any model training
-    eval_train_results = {"instance_seg": []}                                                               # Set the training evaluation results as an empty dictionary 
-    conf_matrix_train, conf_matrix_val, conf_matrix_test = None, None, None                                 # Initialize the confusion matrixes as None values 
     train_dataset = cfg.DATASETS.TRAIN                                                                      # Get the training dataset name
     val_dataset = cfg.DATASETS.TEST                                                                         # Get the validation dataset name
     lr_update_check = np.zeros((FLAGS.patience, 1), dtype=bool)                                             # Preallocating validation array to determine whether or not the learning rate was updated
@@ -139,20 +135,19 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             epoch_start_time = time()                                                                       # Now this new epoch starts
             if FLAGS.inference_only==False:
                 config = launch_custom_training(FLAGS=FLAGS, config=config, dataset=train_dataset, epoch=epoch, run_mode="train", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
-                eval_train_results, train_loader, train_evaluator, conf_matrix_train = evaluateResults(FLAGS, config, data_split="train", dataloader=train_loader, evaluator=train_evaluator, hp_optim=hyperparameter_optimization) # Evaluate the result on the training set
+                eval_train_results, train_loader, train_evaluator = evaluateResults(FLAGS, config, data_split="train", dataloader=train_loader, evaluator=train_evaluator, hp_optim=hyperparameter_optimization) # Evaluate the result on the training set
             
             # Validation period. Will 'train' with lr=0 on validation data, correct the metrics files and evaluate performance on validation data
-            # config = launch_custom_training(FLAGS=FLAGS, config=config, dataset=val_dataset, epoch=epoch, run_mode="val", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
-            # eval_val_results, val_loader, val_evaluator, conf_matrix_val = evaluateResults(FLAGS, config, data_split="val", dataloader=val_loader, evaluator=val_evaluator) # Evaluate the result metrics on the training set
+            config = launch_custom_training(FLAGS=FLAGS, config=config, dataset=val_dataset, epoch=epoch, run_mode="val", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
+            eval_val_results, val_loader, val_evaluator = evaluateResults(FLAGS, config, data_split="val", dataloader=val_loader, evaluator=val_evaluator) # Evaluate the result metrics on the training set
             
-            # # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results
-            # history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results["sem_seg"], # Create and save the learning curves ...
-            #             metrics_eval=eval_val_results["sem_seg"], history=history)                          # ... including all training and validation metrics
-            # save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
-            # [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
+            # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results
+            history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results["sem_seg"], # Create and save the learning curves ...
+                        metrics_eval=eval_val_results["sem_seg"], history=history)                          # ... including all training and validation metrics
+            save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
+            [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
             if np.mod(np.add(epoch,1), FLAGS.display_rate) == 0 and hyperparameter_optimization==False:     # Every 'display_rate' epochs, the model will segment the same images again ...
                 _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... segment and save visualizations
-                _ = plot_confusion_matrix(config=config, epoch=epoch+1, conf_train=conf_matrix_train, conf_val=conf_matrix_val)
             
             # Performing callbacks
             if FLAGS.inference_only==False and hyperparameter_optimization==False: 
@@ -174,13 +169,12 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
 
     # Evaluation on the vitrolife test dataset. There is no ADE20K-test dataset.
     test_history = {}                                                                                       # Initialize the test_history dictionary as an empty dictionary
-    # if all([FLAGS.debugging == False, "vitrolife" in FLAGS.dataset_name.lower(), hyperparameter_optimization==False]):  # Inference will only be performed when training the Vitrolife model
-    #     config.DATASETS.TEST = ("vitrolife_dataset_test",)                                                  # The inference will be done on the test dataset
-    #     eval_test_results,_,_,conf_matrix_test = evaluateResults(FLAGS, config, data_split="test")          # Evaluate the result metrics on the validation set with the best performing model
-    #     _ = plot_confusion_matrix(config=config, conf_train=conf_matrix_train, conf_val=conf_matrix_val, conf_test=conf_matrix_test, done_training=True)
-    #     history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_test_results["sem_seg"], data_split="test")
-    #     for key in history_test.keys():                                                                     # Iterate over all the keys in the history dictionary
-    #         if "test" in key: test_history[key] = history_test[key][-1]                                     # If "test" is in the key, assign the value to the test_dictionary 
+    if all([FLAGS.debugging == False, "vitrolife" in FLAGS.dataset_name.lower(), hyperparameter_optimization==False]):  # Inference will only be performed when training the Vitrolife model
+        config.DATASETS.TEST = ("vitrolife_dataset_test",)                                                  # The inference will be done on the test dataset
+        eval_test_results,_,_ = evaluateResults(FLAGS, config, data_split="test")                           # Evaluate the result metrics on the validation set with the best performing model
+        # history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_test_results["sem_seg"], data_split="test")
+        # for key in history_test.keys():                                                                     # Iterate over all the keys in the history dictionary
+        #     if "test" in key: test_history[key] = history_test[key][-1]                                     # If "test" is in the key, assign the value to the test_dictionary 
 
     # Return the results
     if hyperparameter_optimization: return new_best

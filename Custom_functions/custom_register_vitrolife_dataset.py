@@ -125,12 +125,13 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
 def register_vitrolife_data_and_metadata_func(debugging=False):
     thing_colors = [(0,0,0), (255,0,0), (0,255,0), (0,0,255), (255,255,0),                          # Set random colors for the Background, Well, Zona, PV Space and Cell classes
         (0,220,255), (0,255,220), (0,220,220), (0,185,255), (0,255,185), (0,185,185), (0,150,255)]  # Set similar colors for the PN classes
+    thing_id = {kk: kk for kk in list(class_labels.keys())}
     for split_mode in ["train", "val", "test"]:                                                     # Iterate over the three dataset splits ... 
         DatasetCatalog.register("vitrolife_dataset_{:s}".format(split_mode), lambda split_mode=split_mode: vitrolife_dataset_function(run_mode=split_mode, debugging=debugging))    # Register the dataset
-        MetadataCatalog.get("vitrolife_dataset_{:s}".format(split_mode)).set(thing_classes=list(class_labels.values()),                     # Name the thing classes
-                                                                            thing_colors=thing_colors,                                      # Color the thing classes
-                                                                            thing_dataset_id_to_contiguous_id=list(class_labels.keys()),    # Give ID's to the thing classes
-                                                                            stuff_classes = list(class_labels.values()),                    # The class names 
+        MetadataCatalog.get("vitrolife_dataset_{:s}".format(split_mode)).set(thing_classes=list(class_labels.values()),     # Name the thing classes
+                                                                            thing_colors=thing_colors,                      # Color the thing classes
+                                                                            thing_dataset_id_to_contiguous_id=thing_id,     # Give ID's to the thing classes
+                                                                            stuff_classes = list(class_labels.values()),    # The class names 
                                                                             num_files_in_dataset=len(DatasetCatalog["vitrolife_dataset_{:}".format(split_mode)]())) # Write the length of the dataset
     assert any(["vitrolife" in x for x in list(MetadataCatalog)]), "Datasets have not been registered correctly"    # Assuring the dataset has been registered correctly
 

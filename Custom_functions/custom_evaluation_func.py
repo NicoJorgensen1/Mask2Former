@@ -1,13 +1,15 @@
 # Import the libraries and functions used here
-import sys
 import os
-import torch
 import numpy as np
 from copy import deepcopy
 from detectron2.data import DatasetCatalog, build_detection_train_loader
 from mask2former import MaskFormerInstanceDatasetMapper
 from detectron2.engine.defaults import DefaultPredictor
-from tqdm import tqdm
+from mask2former import InstanceSegEvaluator
+from detectron2.evaluation import inference_on_dataset
+
+from detectron2.modeling import build_model
+from detectron2.data import build_detection_test_loader
 
 
 data_split="train"
@@ -27,19 +29,20 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluator=N
     pred_out_dir = os.path.join(cfg.OUTPUT_DIR, "Predictions", data_split)                                      # The path of where to store the resulting evaluation
     os.makedirs(pred_out_dir, exist_ok=True)                                                                    # Create the evaluation folder, if it doesn't already exist
 
-    # Build the dataloader if no dataloader has been sent to the function as an input
+    # Build the dataloader if no dataloader, evaluator and model instances
     if dataloader is None:                                                                                      # If no dataloader has been inputted to the function ...
-        dataloader = iter(build_detection_train_loader(dataset=DatasetCatalog.get(dataset_name),                # ... create the dataloader for evaluation ...
-            mapper=MaskFormerInstanceDatasetMapper(cfg, is_train=True, augmentations=[]), total_batch_size=1, num_workers=2))   # ... with batch_size = 1 and no augmentation on the mapper
+        dataloader = build_detection_test_loader(cfg=cfg, dataset_name=dataset_name,                            # Create the dataloader ...
+            batch_size=1, mapper=MaskFormerInstanceDatasetMapper(cfg=cfg, is_train=True, augmentations=[]))     # ... with the default mapper and no augmentation 
+    if evaluator is None:
+        evaluator = InstanceSegEvaluator(dataset_name=dataset_name, output_dir=pred_out_dir, allow_cached_coco=False)
+    model = build_model(cfg=cfg)
 
-    # Create the predictor and evaluator instances
-    predictor = DefaultPredictor(cfg=cfg)
+    # Compute the metrics 
+    eval_results = inference_on_dataset(model=model, data_loader=dataloader, evaluator=evaluator)
+    print(eval_results)
+
+    # Return the metrics
+    return eval_results, dataloader, evaluator
 
 
-    for kk, data_batch in enumerate(dataloader):
-        outputs, gt_mask = list(), list()
-        for data in data_batch:
-            img = torch.permute(data["image"], (1,2,0)).numpy()
-            predictor.__call__(img)
-        if kk+1 >= total_runs:
-            break 
+

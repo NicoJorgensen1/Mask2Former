@@ -2,8 +2,9 @@
 import os                                                                               # Used to navigate the folder structure in the current os
 import numpy as np                                                                      # Used for computing the iterations per epoch
 import argparse                                                                         # Used to parse input arguments through command line
-from detectron2.engine import default_argument_parser                                   # Default argument_parser object
 import pickle                                                                           # Used to save the history dictionary after training
+from copy import deepcopy
+from detectron2.engine import default_argument_parser                                   # Default argument_parser object
 from datetime import datetime                                                           # Used to get the current date and time when starting the process
 from shutil import make_archive                                                         # Used to zip the directory of the output folder
 from detectron2.data import DatasetCatalog, MetadataCatalog                             # Catalogs over registered datasets  ...
@@ -56,7 +57,9 @@ def save_dictionary(dictObject, save_folder, dictName):                         
 
 # Write the new config as a .yaml file
 def write_config_to_file(config):
-    with open(os.path.join(config.OUTPUT_DIR, "config_file"), "wb") as f:               # Open a object instance with the config file
+    config = deepcopy(config)
+    config.pop("custom_key")
+    with open(os.path.join(config.OUTPUT_DIR, "config_file.yaml"), "w") as f:           # Open a object instance with the config file
         f.write(config.dump())                                                          # Dump the configuration to a file named config_name in cfg.OUTPUT_DIR
     f.close()                                                                           # Close the writer handle again 
 
@@ -116,8 +119,8 @@ parser.add_argument("--crop_enabled", type=str2bool, default=False, help="Whethe
 parser.add_argument("--hp_optim", type=str2bool, default=True, help="Whether or not we are initiating the training with a hyperparameter optimization. Default: True")
 parser.add_argument("--inference_only", type=str2bool, default=False, help="<< Currently not supported >> Whether or not training is skipped and only inference is run. This input argument deprecates the '--eval_only' argument. Default: False")
 parser.add_argument("--display_images", type=str2bool, default=False, help="Whether or not some random sample images are displayed before training starts. Default: False")
-parser.add_argument("--use_transformer_backbone", type=str2bool, default=False, help="Whether or not we are using the extended swin_small_transformer backbone. Only applicable if '--use_per_pixel_baseline'=False. Default: True")
-parser.add_argument("--debugging", type=str2bool, default=False, help="Whether or not we are debugging the script. Default: False")
+parser.add_argument("--use_transformer_backbone", type=str2bool, default=False, help="Whether or not we are using the extended swin_small_transformer backbone. Default: True")
+parser.add_argument("--debugging", type=str2bool, default=True, help="Whether or not we are debugging the script. Default: False")
 # Parse the arguments into a Namespace variable
 FLAGS = parser.parse_args()
 FLAGS = changeFLAGS(FLAGS)
