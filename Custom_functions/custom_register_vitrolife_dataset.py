@@ -2,28 +2,18 @@ import os
 import pickle
 import cv2
 import time 
-import random
 import pycocotools
 import pandas as pd
 import numpy as np
 from natsort import natsorted
 from copy import deepcopy
-from PIL import Image
 from tqdm import tqdm
 from detectron2.data import DatasetCatalog, MetadataCatalog
 from detectron2.structures import BoxMode
 from detectron2.utils.visualizer import Visualizer
 
-# Create dictionary to store the class names 
-class_names = ["Background", "Well", "Zona", "Perivitelline space", "Cell", "PN"]                   # Write the class names
-class_labels = dict()                                                                               # Initiate a dictionary to hold the class ID's and labels
-for class_id, class_label in enumerate(class_names):                                                # Iterate over all class names
-    if class_label != "PN":                                                                         # If the current class isn't the PN ...
-        class_labels[class_id] = class_label                                                        # ... add it to the dictionary
-    else:                                                                                           # Else if the current class name is PN ...
-        for ii in range(0,7):                                                                       # Then iterate from [0, 7] (7 is the maximum number of PN in the dataset) ...
-            class_labels[class_id+ii] = class_label+"{}".format(ii+1)                               # ... and append the class name 'PN+ii' to the dictionary 
-
+# Create dictionary to store the class names and IDs 
+class_labels = {key: val for key,val in enumerate(["Background", "Well", "Zona", "Perivitelline space", "Cell", "PN"])}
 
 # Function to select sample dictionaries with unique PN's
 def pickSamplesWithUniquePN(dataset_dict):
@@ -93,7 +83,7 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
             obj = dict()                                                                            # Each instance on the image must be in the format of a dictionary
             obj["bbox"] = [float(val) for val in [y1, x1, y2, x2]]                                  # Get the bounding box for the current object
             obj["bbox_mode"] = BoxMode.XYXY_ABS                                                     # The mode of the bounding box
-            obj["category_id"] = np.asarray(list(class_labels.keys()))[np.isin(list(class_labels.values()), key)].item()    # Get the category_ID from the key-value pair of the class_labels dictionary
+            obj["category_id"] = np.asarray(list(class_labels.keys()))[[bool(x in key) for x in list(class_labels.values())]].item()    # Get the category_ID from the key-value pair of the class_labels dictionary
             obj["segmentation"] = pycocotools.mask.encode(np.asarray(mask, order="F"))              # Convert the mask into a COCO compressed RLE dictionary
             obj["iscrowd"] = 0                                                                      # No object instances are labeled as COCO crowd-regions 
             annotations.append(obj)                                                                 # Append the current object instance to the annotations list
@@ -105,9 +95,9 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
                 mask_to_show = cv2.putText(mask_to_show, key, (25,35), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255,0,0), 2, cv2.LINE_AA)   # Add the key (instance label) as a text
                 mask_to_show = cv2.putText(mask_to_show, "Positive pixels: {}".format(np.sum(mask)), (25,70), cv2.FONT_HERSHEY_SIMPLEX, 0.85, (255,0,0), 2, cv2.LINE_AA)    # Add the amount of positive pixels as a text
                 im_to_show = cv2.hconcat([orig_im, border, mask_to_show])                           # Concatenate the original image and the mask into a single image because opencv can't operate with subplots
-                winname = img_filename_wo_ext + "with {} PNs".format(int(row["PN_image"]))        # Create a name for the figure window
+                winname = img_filename_wo_ext + "with {} PNs".format(int(row["PN_image"]))          # Create a name for the figure window
                 cv2.namedWindow(winname)                                                            # Create a figure with the chosen name 
-                cv2.moveWindow(winname, 2100,30)                                                    # Move the upper left corner to this pixel position
+                cv2.moveWindow(winname, 50,50)                                                      # Move the upper left corner to this pixel position
                 cv2.imshow(winname, im_to_show)                                                     # Display the image
                 cv2.waitKey(0)
                 time.sleep(0.5)
@@ -140,6 +130,7 @@ def register_vitrolife_data_and_metadata_func(debugging=False):
         MetadataCatalog.get("vitrolife_dataset_{:s}".format(split_mode)).set(thing_classes=list(class_labels.values()),                     # Name the thing classes
                                                                             thing_colors=thing_colors,                                      # Color the thing classes
                                                                             thing_dataset_id_to_contiguous_id=list(class_labels.keys()),    # Give ID's to the thing classes
+                                                                            stuff_classes = list(class_labels.values()),                    # The class names 
                                                                             num_files_in_dataset=len(DatasetCatalog["vitrolife_dataset_{:}".format(split_mode)]())) # Write the length of the dataset
     assert any(["vitrolife" in x for x in list(MetadataCatalog)]), "Datasets have not been registered correctly"    # Assuring the dataset has been registered correctly
 
@@ -148,23 +139,29 @@ def register_vitrolife_data_and_metadata_func(debugging=False):
 # Test that the function will actually return a list of dicts
 # train_dataset = img_mask_list_train = vitrolife_dataset_function(run_mode="train", visualize=False)
 # val_dataset = img_mask_list_val = vitrolife_dataset_function(run_mode="val", visualize=False)
-# test_dataset = img_mask_list_test = vitrolife_dataset_function(run_mode="test", visualize=False)
+# test_dataset = img_mask_list_test = vitrolife_dataset_function(run_mode="test", debugging=True, visualize=False)
 
 
-# Visualize some random samples using the Detectron visualizer 
-# try: register_vitrolife_data_and_metadata_func(debugging=False)
+# # Visualize some random samples using the Detectron2 visualizer 
+# try: register_vitrolife_data_and_metadata_func(debugging=True)
 # except Exception as ex:
 #     error_string = "An exception of type {0} occured while trying to register the datasets. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
 # vitro_metadata = MetadataCatalog.get("vitrolife_dataset_test")
-# for d in random.sample(test_dataset, 5):
+# for kk, d in enumerate(test_dataset):
 #     img = cv2.imread(d["file_name"])
 #     visualizer = Visualizer(img[:, :, ::-1], metadata=vitro_metadata, scale=0.5)
 #     out = visualizer.draw_dataset_dict(d)
-#     window_name = "Test_dataset"
+#     mask_im = out.get_image()[:, :, ::-1]
+#     img = cv2.resize(img, mask_im.shape[:-1], cv2.INTER_LINEAR)
+#     border = np.multiply(np.ones((250, 25, 3)).astype(np.uint8), (150, 0, 255)).astype(np.uint8)                # Create a border between subplots
+#     concated_image = cv2.hconcat([img, border, mask_im])
+#     window_name = "Concatenated image with {:.0f} PN".format(d["image_custom_info"]["PN_image"])
 #     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-#     cv2.imshow(window_name,out.get_image()[:, :, ::-1])
-#     cv2.moveWindow(window_name, 2100,30)
+#     cv2.imshow(window_name, concated_image)
+#     cv2.moveWindow(window_name, 40,30)
 #     cv2.resizeWindow(window_name,1450,800)
 #     cv2.waitKey(0)
 #     time.sleep(2)
-# cv2.destroyAllWindows() 
+#     cv2.destroyAllWindows() 
+#     if kk >= 5:
+#         break 
