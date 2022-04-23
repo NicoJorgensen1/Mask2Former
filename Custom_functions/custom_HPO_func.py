@@ -47,7 +47,7 @@ def object_func(trial):
     while np.isnan(new_best):                                                                       # Sometimes the iteration fails for some reason. We'll allow 3 attempts before skipping and moving on
         new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=["this is an empty list"], hyperparameter_optimization=True)
         # try:
-            # new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=["this is an empty list"], hyperparameter_optimization=True)
+        #     new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=["this is an empty list"], hyperparameter_optimization=True)
         # except Exception as ex:
         #     error_str = "An exception of type {0} occured. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
         #     printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
@@ -86,8 +86,7 @@ def perform_HPO():                                                              
         storage_file = "sqlite:///{}.db".format(os.path.join(cfg.OUTPUT_DIR, study_name))           # Create a database file in local memory to store the study 
         study_direction = "minimize" if "loss" in FLAGS.eval_metric else "maximize"                 # The direction in which we want the HPO metric to go
         study = optuna.create_study(sampler=TPE_sampler, study_name=study_name, direction=study_direction, storage=storage_file, load_if_exists=True)    # Needs all these arguments to reload a study ...
-        study.optimize(object_func, n_trials=FLAGS.num_trials, callbacks=[lambda study, trial: garb_collect.collect()],
-                        catch=(MemoryError, RuntimeError, TypeError, ValueError, ZeroDivisionError), gc_after_trial=True)
+        study.optimize(object_func, n_trials=FLAGS.num_trials, callbacks=[lambda study, trial: garb_collect.collect()], catch=(MemoryError,), gc_after_trial=True)
         trial = study.best_trial 
         best_params = trial.params 
         save_dictionary(dictObject=best_params, save_folder=cfg.OUTPUT_DIR, dictName="best_HPO_params")

@@ -56,15 +56,15 @@ def launch_custom_training(FLAGS, config, dataset, epoch=0, run_mode="train", hy
 def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
     # If we are performing hyperparameter optimization, the config should be updated
     if all([hpt_opt==True, trial is not None, FLAGS.hp_optim==True]):
-        lr = trial.suggest_float(name="learning_rate", low=1e-6, high=5e-3)
+        lr = trial.suggest_float(name="learning_rate", low=1e-8, high=1e-3)
         batch_size = trial.suggest_int(name="batch_size", low=1, high=1 if "nico" in os.getenv("DETECTRON2_DATASETS").lower() else int(np.ceil(np.min(FLAGS.available_mem_info)/1250)))
         optimizer_used = trial.suggest_categorical(name="optimizer_used", choices=["ADAMW", "SGD"])
         weight_decay = trial.suggest_float(name="weight_decay", low=1e-8, high=2e-2)
-        dice_loss_weight = trial.suggest_int(name="dice_loss_weight", low=1, high=25)
-        mask_loss_weight = trial.suggest_int(name="mask_loss_weight", low=1, high=25)
-        class_loss_weight = trial.suggest_int(name="class_loss_weight", low=1, high=25)
+        dice_loss_weight = trial.suggest_float(name="dice_loss_weight", low=1, high=25)
+        mask_loss_weight = trial.suggest_float(name="mask_loss_weight", low=1, high=25)
+        class_loss_weight = trial.suggest_float(name="class_loss_weight", low=1, high=25)
         no_object_weight = trial.suggest_float(name="no_object_weight", low=0.001, high=2)
-        backbone_multiplier = trial.suggest_float("backbone_multiplier", low=1e-6, high=0.5)
+        backbone_multiplier = trial.suggest_float("backbone_multiplier", low=1e-8, high=0.25)
 
         # Change the FLAGS parameters and then change the config
         FLAGS.learning_rate = lr
@@ -142,8 +142,8 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             eval_val_results, val_loader, val_evaluator = evaluateResults(FLAGS, config, data_split="val", dataloader=val_loader, evaluator=val_evaluator) # Evaluate the result metrics on the training set
             
             # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results
-            history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results["sem_seg"], # Create and save the learning curves ...
-                        metrics_eval=eval_val_results["sem_seg"], history=history)                          # ... including all training and validation metrics
+            history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results["segm"],    # Create and save the learning curves ...
+                        metrics_eval=eval_val_results["segm"], history=history)                             # ... including all training and validation metrics
             save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
             [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
             if np.mod(np.add(epoch,1), FLAGS.display_rate) == 0 and hyperparameter_optimization==False:     # Every 'display_rate' epochs, the model will segment the same images again ...
@@ -164,7 +164,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                 printAndLog(input_to_write="Committing early stopping at epoch {:d}. The best {:s} is {:.3f} from epoch {:d}".format(epoch+1, FLAGS.eval_metric, new_best, best_epoch), logs=logs)
                 break                                                                                       # break the for loop and stop running more epochs
         # except Exception as ex:
-        #     error_string = "An exception of type {} occured while doing epoch {}/{}. Arguments:\n{!r}".format(type(ex).__name__, epoch+1, epochs_to_run, ex.args)
+        #     error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, epochs_to_run, ex.args)
         #     printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
 
     # Evaluation on the vitrolife test dataset. There is no ADE20K-test dataset.
@@ -172,9 +172,9 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     if all([FLAGS.debugging == False, "vitrolife" in FLAGS.dataset_name.lower(), hyperparameter_optimization==False]):  # Inference will only be performed when training the Vitrolife model
         config.DATASETS.TEST = ("vitrolife_dataset_test",)                                                  # The inference will be done on the test dataset
         eval_test_results,_,_ = evaluateResults(FLAGS, config, data_split="test")                           # Evaluate the result metrics on the validation set with the best performing model
-        # history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_test_results["sem_seg"], data_split="test")
-        # for key in history_test.keys():                                                                     # Iterate over all the keys in the history dictionary
-        #     if "test" in key: test_history[key] = history_test[key][-1]                                     # If "test" is in the key, assign the value to the test_dictionary 
+        history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_test_results["segm"], data_split="test")
+        for key in history_test.keys():                                                                     # Iterate over all the keys in the history dictionary
+            if "test" in key: test_history[key] = history_test[key][-1]                                     # If "test" is in the key, assign the value to the test_dictionary 
 
     # Return the results
     if hyperparameter_optimization: return new_best

@@ -147,7 +147,6 @@ class HungarianMatcher(nn.Module):
                 + self.cost_dice * cost_dice
             )
             C = C.reshape(num_queries, -1).cpu()
-
             indices.append(linear_sum_assignment(C))
 
         return [

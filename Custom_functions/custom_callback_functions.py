@@ -14,8 +14,8 @@ def early_stopping(history, FLAGS, quit_training=False):
     if np.max(history["train_epoch_num"]) > FLAGS.early_stop_patience+FLAGS.warm_up_epochs:     # If we have run for at least FLAGS.early_stop_patience epochs, we'll continue
         if mode=="max": val_used = np.max(metric_monitored)                                     # If we monitor an increasing metric, we want to find the largest value
         if mode=="min": val_used = np.min(metric_monitored)                                     # If we monitor a decreasing metric, we want to find the smallest value    
-        if mode=="max" and val_used <= metric_monitored[0] + FLAGS.min_delta or mode=="min" and val_used >= metric_monitored[0] - FLAGS.min_delta:  # If the model hasn't improved in the last ...
-            quit_training = True                                                                # ... 'early_stop_patience' epochs, the training is terminated
+        if all([mode=="max", val_used <= metric_monitored[0] + FLAGS.min_delta]) or all([mode=="min", val_used >= metric_monitored[0] - FLAGS.min_delta]):  # If the model hasn't ...
+            quit_training = True                                                                # ... improved in the last 'early_stop_patience' epochs, the training is terminated
             FLAGS.quit_training = quit_training
     return quit_training
 
@@ -101,7 +101,7 @@ def updateLogsFunc(log_file, FLAGS, history, best_val, train_start, epoch_start,
     string1, string2 = computeRemainingTime(epoch=epoch-1, num_epochs=FLAGS.num_epochs, train_start_time=train_start, epoch_start_time=epoch_start)
         
     # Read the latest evaluation results
-    metrics_train_keys = [x for x in history.keys() if "train" in x and any([y in x for y in ["IoU", "ACC"]])]
+    metrics_train_keys = [x for x in history.keys() if "train" in x and any([y in x for y in ["AP"]])]
     metrics_train = {key: history[key][-1] for key in metrics_train_keys}
 
     # Update the logfile 
@@ -109,7 +109,7 @@ def updateLogsFunc(log_file, FLAGS, history, best_val, train_start, epoch_start,
         printAndLog(input_to_write=string1, logs=log_file, postfix="\n")
     printAndLog(input_to_write="Train metrics:".ljust(25), logs=log_file, prefix="", postfix="")
     printAndLog(input_to_write=metrics_train, logs=log_file, oneline=True, prefix="", postfix="\n", length=15)
-    metrics_val_keys = [x for x in history.keys() if "val" in x and any([y in x for y in ["IoU", "ACC"]])]
+    metrics_val_keys = [x for x in history.keys() if "val" in x and any([y in x for y in ["AP"]])]
     metrics_val = {key: history[key][-1] for key in metrics_val_keys}
     printAndLog(input_to_write="Validation metrics:".ljust(25), logs=log_file, prefix="")
     printAndLog(input_to_write=metrics_val, logs=log_file, oneline=True, prefix="", postfix="\n", length=15)

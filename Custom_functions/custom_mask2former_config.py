@@ -41,9 +41,7 @@ def createVitrolifeConfiguration(FLAGS):
     if "vitrolife" in FLAGS.dataset_name.lower():                                                   # If we are working on the Vitrolife dataset ... 
         cfg["DATASETS"]["TRAIN"] = ("vitrolife_dataset_train",)                                     # ... define the training dataset by using the config as a dictionary
         cfg.DATASETS.TEST = ("vitrolife_dataset_val",)                                              # ... define the validation dataset by using the config as a CfgNode 
-        class_labels = deepcopy(MetadataCatalog.get("vitrolife_dataset_test").thing_classes)        # Read all the class labels ...
-        class_labels.remove("Background")                                                           # ... remove the background label
-        cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(class_labels)                                         # ... and assign the length of the remaining list as the number of classes
+        cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(MetadataCatalog.get("vitrolife_dataset_test").thing_classes)  # ... and assign the length of the remaining list as the number of classes
 
     cfg.MODEL.MASK_FORMER.TEST.SEMANTIC_ON = False                                                  # The Sem_Seg head will be off
     cfg.MODEL.MASK_FORMER.TEST.INSTANCE_ON = True                                                   # The Instance Seg head will be on

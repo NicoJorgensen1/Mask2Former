@@ -13,7 +13,7 @@ from detectron2.structures import BoxMode
 from detectron2.utils.visualizer import Visualizer
 
 # Create dictionary to store the class names and IDs 
-class_labels = {key: val for key,val in enumerate(["Well", "Zona", "Perivitelline space", "Cell", "PN"])}
+class_labels = {kk: val for kk,val in enumerate(["Well", "Zona", "Perivitelline space", "Cell", "PN"])}
 
 # Function to select sample dictionaries with unique PN's
 def pickSamplesWithUniquePN(dataset_dict):
@@ -43,8 +43,9 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
     total_files = len(os.listdir(os.path.join(vitrolife_dataset_filepath, "raw_images")))           # List all the image files in the raw_images directory
     iteration_counter = 0                                                                           # Initiate a iteration counter 
     count = 0                                                                                       # Initiate a counter to count the number of images inserted to the dataset
-    for img_filename in tqdm(os.listdir(os.path.join(vitrolife_dataset_filepath, "raw_images")),    # Loop through all files in the raw_images folder
-            total=total_files, unit="img", postfix="Read the Vitrolife {:s} dataset dictionaries".format(run_mode), leave=True,
+    available_image_files = natsorted([x for x in os.listdir(os.path.join(vitrolife_dataset_filepath, "raw_images")) if x.endswith(".jpg")])    # Read a list of all available images 
+    for img_filename in tqdm(available_image_files, total=total_files, unit="img",                  # Loop through all files in the raw_images folder
+            postfix="Read the Vitrolife {:s} dataset dictionaries".format(run_mode), leave=True,
             bar_format="{desc}  | {percentage:3.0f}% | {bar:45}| {n_fmt}/{total_fmt} | Spent: {elapsed}. Remaining: {remaining} | {postfix}]"):  
         iteration_counter += 1                                                                      # Increase the counter that counts the number of iterations in the for-loop
         img_filename_wo_ext = os.path.splitext(os.path.basename(img_filename))[0]                   # Get the image filename without .jpg extension
@@ -71,17 +72,20 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
         for key in annotation_dict_file.keys():                                                     # Loop through each key (=object/instance) in the current image
             mask = deepcopy(annotation_dict_file[key])                                              # Get the current mask as the value of the given key 
             if np.sum(mask) < 2: continue                                                           # We need at least two positive pixels to create a mask with the given instance 
-            if len(positive_pixels_list) > 1:                                                       # If more than one object instance has been added ...
-                if np.sum(mask) == positive_pixels_list[-1] and "PN" not in key:                    # ... and the current instance has the exact same amount of positive pixels and is not a PN, then something is wrong ...
-                    continue                                                                        # ... and the current instance is simply skipped 
-            positive_pixels_list.append(np.sum(mask))                                               # Append the approved amount of positive pixels to the list 
             mask_pixel_coordinates = np.asarray(np.where(mask))                                     # Get all pixel coordinates for the true pixels in the mask
             x1, y1 = np.amin(mask_pixel_coordinates, axis=1)                                        # Extract the minimum x and y true pixel values
             x2, y2 = np.amax(mask_pixel_coordinates, axis=1)                                        # Extract the maximum x and y true pixel values
+            bbox = [float(val) for val in [y1, x1, y2, x2]]                                         # Convert the bounding box to float values
+            positive_pixels_list.append(np.sum(mask))                                               # Append the approved amount of positive pixels to the list 
 
+            if len(positive_pixels_list) > 1:                                                       # If more than one object instance has been added ...
+                if all([np.sum(mask) == positive_pixels_list[-1],                                   # ... and the current instance has the exact same amount of positive pixels ...
+                                        obj["bbox"]==bbox,                                          # ... and the exact same bounding box ...
+                                        "PN" not in key]):                                          # ... and is not a PN, then something is wrong ...
+                    continue                                                                        # ... thus the current instance is simply skipped 
             # Create the dictionary for the current object instance
             obj = dict()                                                                            # Each instance on the image must be in the format of a dictionary
-            obj["bbox"] = [float(val) for val in [y1, x1, y2, x2]]                                  # Get the bounding box for the current object
+            obj["bbox"] = bbox                                                                      # Get the bounding box for the current object
             obj["bbox_mode"] = BoxMode.XYXY_ABS                                                     # The mode of the bounding box
             obj["category_id"] = np.asarray(list(class_labels.keys()))[[bool(x in key) for x in list(class_labels.values())]].item()    # Get the category_ID from the key-value pair of the class_labels dictionary
             obj["segmentation"] = pycocotools.mask.encode(np.asarray(mask, order="F"))              # Convert the mask into a COCO compressed RLE dictionary
@@ -103,7 +107,6 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
                 time.sleep(0.5)
         if visualize:
             cv2.destroyAllWindows() 
-        
         # Create the current image/mask pair 
         current_pair = {"file_name": row["img_file"],                                               # Initiate the dict of the current image with the full filepath + filename
                         "height": mask.shape[0],                                                    # Write the image height
@@ -114,7 +117,9 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
                         "image_custom_info": row}                                                   # Add all the info from the current row to the dataset
         img_mask_pair_list.append(current_pair)                                                     # Append the dictionary for the current pair to the list of images for the given dataset
         count += 1                                                                                  # Increase the sample counter 
-        if count > 10: break
+        if "nico" in vitrolife_dataset_filepath.lower():                                            # If we are working on my local computer ...
+            if count > 20:                                                                          # ... and 20 images have already been loaded ...
+                break                                                                               # ... then that is enough, thus quit reading the rest of the images 
     assert len(img_mask_pair_list) >= 1, print("No image/mask pairs found in {:s} subfolders 'raw_image' and 'masks'".format(vitrolife_dataset_filepath))
     img_mask_pair_list = natsorted(img_mask_pair_list)                                              # Sorting the list assures the same every time this function runs
     if debugging==True: img_mask_pair_list=pickSamplesWithUniquePN(img_mask_pair_list)              # If we are debugging, we'll only get one sample with each number of PN's 
@@ -123,15 +128,14 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
 
 # Function to register the dataset and the meta dataset for each of the three splitshuffleshuffles, [train, val, test]
 def register_vitrolife_data_and_metadata_func(debugging=False):
-    thing_colors = [(0,0,0), (255,0,0), (0,255,0), (0,0,255), (255,255,0),                          # Set random colors for the Background, Well, Zona, PV Space and Cell classes
+    thing_colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0),                                   # Set random colors for the Well, Zona, PV Space and Cell classes
         (0,220,255), (0,255,220), (0,220,220), (0,185,255), (0,255,185), (0,185,185), (0,150,255)]  # Set similar colors for the PN classes
-    thing_id = {kk: kk for kk in list(class_labels.keys())}
+    thing_id = {kk: key for kk,key in enumerate(list(class_labels.keys()))}                         # Get a dictionary of continuous keys
     for split_mode in ["train", "val", "test"]:                                                     # Iterate over the three dataset splits ... 
         DatasetCatalog.register("vitrolife_dataset_{:s}".format(split_mode), lambda split_mode=split_mode: vitrolife_dataset_function(run_mode=split_mode, debugging=debugging))    # Register the dataset
         MetadataCatalog.get("vitrolife_dataset_{:s}".format(split_mode)).set(thing_classes=list(class_labels.values()),     # Name the thing classes
                                                                             thing_colors=thing_colors,                      # Color the thing classes
                                                                             thing_dataset_id_to_contiguous_id=thing_id,     # Give ID's to the thing classes
-                                                                            stuff_classes = list(class_labels.values()),    # The class names 
                                                                             num_files_in_dataset=len(DatasetCatalog["vitrolife_dataset_{:}".format(split_mode)]())) # Write the length of the dataset
     assert any(["vitrolife" in x for x in list(MetadataCatalog)]), "Datasets have not been registered correctly"    # Assuring the dataset has been registered correctly
 
@@ -160,7 +164,7 @@ def register_vitrolife_data_and_metadata_func(debugging=False):
 #     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 #     cv2.imshow(window_name, concated_image)
 #     cv2.moveWindow(window_name, 40,30)
-#     cv2.resizeWindow(window_name,1450,800)
+#     cv2.resizeWindow(window_name,1100,800)
 #     cv2.waitKey(0)
 #     time.sleep(2)
 #     cv2.destroyAllWindows() 

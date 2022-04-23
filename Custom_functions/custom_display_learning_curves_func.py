@@ -5,7 +5,7 @@ import numpy as np                                                              
 import matplotlib.pyplot as plt                                                                         # The plotting package
 from natsort import natsorted                                                                           # Function to natural sort a list or array 
 from copy import deepcopy                                                                               # Used to make a copy of the key-name before replacing class name with class idx
-from visualize_image_batch import extractNumbersFromString                                              # Function to extract numbers from a string
+from custom_image_batch_visualize_func import extractNumbersFromString                                  # Function to extract numbers from a string
 from detectron2.data import MetadataCatalog                                                             # Catalogs for metadata for registered datasets
 
 # config = cfg
@@ -47,13 +47,15 @@ def load_json_metrics(config, data_split="train"):
 
 # Create a function to replace the class_name in a string with the corresponding class_idx
 def changeClassNameForClassIdxFunc(key, config):
-    class_names = MetadataCatalog[config.DATASETS.TRAIN[0]].stuff_classes                               # Get the class names for the dataset
-    try: class_indices = list(MetadataCatalog[config.DATASETS.TRAIN[0]].stuff_dataset_id_to_contiguous_id.keys())   # Get the class indices for the dataset ...
+    class_names = MetadataCatalog[config.DATASETS.TRAIN[0]].thing_classes                               # Get the class names for the dataset
+    try: class_indices = list(MetadataCatalog[config.DATASETS.TRAIN[0]].thing_dataset_id_to_contiguous_id.keys())   # Get the class indices for the dataset ...
     except: class_indices = list(range(len(class_names)))                                               # ... or if that is not possible, assume class indices are a list from [0, K-1]
+    if "vitrolife" in config.DATASETS.TRAIN[0].lower():                                                 # If we are using the vitrolife dataset ...
+        class_indices = np.add(class_indices, 1).tolist()                                               # ... we add 1 to indices to start class_counting from 1 instead of 0, due to missing Background-class
     for class_name, class_lbl in zip(class_names, class_indices):                                       # Iterate over all the class names and the corresponding class labels
         if class_name.lower() in key.lower():                                                           # If the class name is in the key name ...
             key = key.lower().replace(class_name.lower(), "C{:d}".format(class_lbl))                    # ... the class_name part is replaced with the corresponding class label
-            key = key.replace("-", "_").replace("acc", "ACC").replace("iou", "IoU").replace("-", "_")   # ... and we make sure the key is written in proper format
+            key = key.replace("ap", "AP").replace("-", "_")                                             # ... and we make sure the key is written in proper format
             break                                                                                       # ... and we stop iterating over the rest of the class_names
     return key                                                                                          # Return the new key name
 
@@ -61,25 +63,28 @@ def changeClassNameForClassIdxFunc(key, config):
 # Create a function to extract the list of lists containing the keys that are relevant to show
 def extractRelevantHistoryKeys(history):
     loss_total = [key for key in history.keys() if "total_loss" in key.lower()]                         # Find all keys with loss_ce
-    m_fw_IoU = [key for key in history.keys() if key.endswith("IoU")]                                   # Find the mIoU and fIoU keys
-    pq_rq_sq = [key for key in history.keys() if any([x in key for x in ["_RQ", "_SQ", "_PQ"]]) and not any([x in key for x in ["_RQ_C", "_SQ_C", "_PQ_C"]])]   # Find all the [rq, sq, pq] keys
-    mACC_pACC = [key for key in history.keys() if key.endswith("ACC")]                                  # Find the keys with the pixel accuracy
     loss_ce = [key for key in history.keys() if "loss_ce" in key.lower() and key.endswith("ce")]        # Find all keys with loss_ce
     loss_dice = [key for key in history.keys() if "loss_dice" in key.lower() and key.endswith("dice")]  # Find all keys with loss_dice
     loss_mask = [key for key in history.keys() if "loss_mask" in key.lower() and key.endswith("mask")]  # Find all keys with loss_mask
-    IoU_per_class = [key for key in history.keys() if "_IoU_" in key and not key.endswith("IoU")]       # Find the class specific IoU keys
-    pACC_per_class = [key for key in history.keys() if "_ACC_" in key and not key.endswith("ACC")]      # Find the class specific pixel accuracies
-    PQ_per_class = [key for key in history.keys() if "_PQ_" in key and not key.endswith("PQ")]          # Extract all keys with the per_class PQ
-    RQ_per_class = [key for key in history.keys() if "_RQ_" in key and not key.endswith("RQ")]          # Extract all keys with the per_class RQ
-    SQ_per_class = [key for key in history.keys() if "_SQ_" in key and not key.endswith("SQ")]          # Extract all keys with the per_class SQ
     learn_rate = [key for key in history.keys() if "lr" in key.lower() and "val" not in key.lower()]    # Find the training learning rate
-    hist_keys_list = [loss_total, m_fw_IoU, pq_rq_sq, mACC_pACC, loss_ce, loss_dice, loss_mask,         # Combine the key-lists into a list of ...
-                learn_rate, pACC_per_class, PQ_per_class, RQ_per_class, SQ_per_class, IoU_per_class]    # lists containing all relevant keys
+    AP_total = [key for key in history.keys() if key.endswith("AP")]
+    AP_50 = [key for key in history.keys() if "AP" in key and key.endswith("50")]
+    AP_75 = [key for key in history.keys() if "AP" in key and key.endswith("75")]
+    AP_Small = [key for key in history.keys() if "AP" in key and key.endswith("s")]
+    AP_Medium = [key for key in history.keys() if "AP" in key and key.endswith("m")]
+    AP_Large = [key for key in history.keys() if "AP" in key and key.endswith("l")]
+    AP_Well  = [key for key in history.keys() if "AP" in key and key.endswith("C1")]
+    AP_Zona  = [key for key in history.keys() if "AP" in key and key.endswith("C2")]
+    AP_PV_space  = [key for key in history.keys() if "AP" in key and key.endswith("C3")]
+    AP_Cell = [key for key in history.keys() if "AP" in key and key.endswith("C4")]
+    AP_PN = [key for key in history.keys() if "AP" in key and key.endswith("C5")]
+    hist_keys_list = [loss_total, AP_total, AP_50, loss_ce, loss_dice, loss_mask, learn_rate,
+            AP_75, AP_Small, AP_Medium, AP_Large, AP_Well, AP_Zona, AP_PV_space, AP_Cell, AP_PN]
     return hist_keys_list
 
 
 # Create a function to create the history dictionary
-def combineDataToHistoryDictionaryFunc(config, eval_metrics=None, pq_metrics=None, data_split="train", history=None, json_metrics=None):
+def combineDataToHistoryDictionaryFunc(config, eval_metrics=None, data_split="train", history=None, json_metrics=None):
     if history == None: history = {}                                                                    # Initiate the history dictionary that will be used
     if "train" in data_split: json_metrics = load_json_metrics(config=config, data_split="train")       # Load the metrics into the history dictionary
     if "val" in data_split: json_metrics = load_json_metrics(config=config, data_split="val")           # Load the metrics into the history dictionary
@@ -91,53 +96,29 @@ def combineDataToHistoryDictionaryFunc(config, eval_metrics=None, pq_metrics=Non
             key = changeClassNameForClassIdxFunc(key=key, config=config)                                # Exchange class_name with class_label in the key-name
             if data_split+"_"+key not in history: history[data_split+"_"+key] = list()                  # If the given key doesn't exist add the key with ...
             history[data_split+"_"+key].append(eval_metrics[old_key])                                   # Append the current key-value from the metrics_train
-    if pq_metrics is not None:                                                                          # If any panoptic quality metrics are available ...
-        for master_key in pq_metrics.keys():                                                            # Iterate over all keys in the PQ results ...
-            if "all" in master_key.lower():                                                             # Available master_keys are ['All', 'per_class', 'Stuff']. All and Stuff are identical (at least AFAIK)
-                for key in pq_metrics[master_key].keys():                                               # ... each element in the PQ_results is a new dictionary
-                    if "n" in key.lower(): continue                                                     # If the key in the new dictionary is just the 'n' (number of classes), then skip that one
-                    if data_split+"_"+key.upper() not in history: history[data_split+"_"+key.upper()] = list()  # If the given key doesn't exist add the key with ...
-                    history[data_split+"_"+key.upper()].append(pq_metrics[master_key][key]*100)         # Append the current key-value from the metrics_train
-            if "per_class" in master_key.lower():                                                       # If we are looking at the per_class panoptic scores ...
-                for class_key in pq_metrics[master_key].keys():                                         # ... we'll iterate over all classes
-                    for key in pq_metrics[master_key][class_key]:                                       # Loop through all the class_variables of PQ, SQ, RQ
-                        if data_split+"_{:s}_C{:d}".format(key.upper(), class_key) not in history: history[data_split+"_{:s}_C{:d}".format(key.upper(), class_key)] = list()
-                        history[data_split+"_{:s}_C{:d}".format(key.upper(), class_key)].append(pq_metrics[master_key][class_key][key]*100)
-    new_history = {key: history[key] for key in history.keys() if all(np.isnan(history[key]))==False and "_C{:d}".format(MetadataCatalog[config.DATASETS.TRAIN[0]].ignore_label) not in key}
-    return new_history
+    return history
 
 
 # Function to display learning curves
-def show_history(config, FLAGS, metrics_train, metrics_eval, pq_train, pq_val, history=None):           # Define a function to visualize the learning curves
-    """"
-    Mean intersection-over-union averaged across classes (mIoU)
-    Frequency Weighted IoU (fwIoU)
-    Mean pixel accuracy averaged across classes (mACC)
-    Pixel Accuracy (pACC)
-    """
+def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):           # Define a function to visualize the learning curves
     # Create history and list of relevant history keys
     if FLAGS.inference_only==False or FLAGS.hp_optim==False:
-        history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_train, pq_metrics=pq_train, data_split="train", history=history)
-    history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_eval, pq_metrics=pq_val, data_split="val", history=history)
+        history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_train, data_split="train", history=history)
+    history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_eval, data_split="val", history=history)
     hist_keys = extractRelevantHistoryKeys(history)
-    ax_titles = ["Total_loss", "mIoU and fwIoU", "PQ, RQ, SQ", "mACC and pACC", "Loss_CE", "Loss_DICE", "Loss_Mask",        # Create titles and ylabels ...
-            "Learning_rate", "Pixel_accuracy_per_class", "PQ_per_class", "RQ_per_class", "SQ_per_class", "IoU_per_class"]   # ... for the axes
+    ax_titles = ["Total_loss", "AP@.5:.05:.95", "AP50", "Loss_CE", "Loss_DICE", "Loss_mask", "Learning_rate",   # Create titles for the axes, ...
+        "AP75", "AP_small", "AP_medium", "AP_large", "AP_Well", "AP_Zona", "AP_PV_space", "AP_Cell", "AP_PN"]   # ... legends and y labels
     colors = ["blue", "red", "black", "green", "magenta", "cyan", "yellow", "deeppink", "purple",       # Create colors for ... 
                 "peru", "darkgrey", "gold", "springgreen", "orange", "crimson", "lawngreen"]            # ... the line plots
-    n_rows, n_cols, ax_count = 3, (3,5,5), 0                                                            # Initiate values for the number of rows and columns
-    if FLAGS.use_per_pixel_baseline==True:                                                              # If we train with the per_pixel_classification method ...
-        n_rows, n_cols = 3, tuple(np.subtract(n_cols,(0,2,1)))                                          # ... the number of rows and columns gets reduced
-        ax_tuple = [(ii,x) for (ii,x) in enumerate(ax_titles) if not x.lower().startswith("loss")]      # Get a list of tuples of ax_titles and their indexes to keep
-        ax_titles = [x[1] for x in ax_tuple]                                                            # Get the new list of kept ax_titles
-        indices = [x[0] for x in ax_tuple]                                                              # Get the indices of the accepted ax_titles
-        hist_keys = np.asarray(hist_keys, dtype=object)[indices].tolist()                               # Get the new list of kept metrics to visualize
+
+    n_rows, n_cols, ax_count = 4, (3,4,4,5), 0                                                          # Initiate values for the number of rows and columns
     if FLAGS.num_classes > 10:                                                                          # If there are more than 10 classes (i.e. for ADE20K_dataset) ...
-        n_rows, n_cols = 3, tuple(np.subtract(n_cols,(1,2,2)))                                          # ... the number of rows and columns gets reduced ...
-        ax_tuple = [(ii,x) for (ii,x) in enumerate(ax_titles) if "per_class" not in x]                  # ... remove the ax_titles with "per class", as we can't visualize that many classes simultaneously
+        n_rows, n_cols = 3, (3,4,4)                                                                     # ... the number of rows and columns gets reduced ...
+        class_names = MetadataCatalog[config.DATASETS.TRAIN[0]].thing_classes                           # Get the class names for the dataset
+        ax_tuple = [(ii,x) for (ii,x) in enumerate(ax_titles) if "PV_space" not in x and not any([y in x for y in class_names])]    # ... remove the class_specific ax_titles
         ax_titles = [x[1] for x in ax_tuple]                                                            # Get the new list of kept ax_titles
         indices = [x[0] for x in ax_tuple]                                                              # Get the indices of the accepted ax_titles
         hist_keys = np.asarray(hist_keys, dtype=object)[indices].tolist()                               # Get the new list of kept metrics to visualize
-    if FLAGS.num_classes > 10 and FLAGS.use_per_pixel_baseline==True: n_rows, n_cols = 2, (2,3)         # If both Loss_CE, Loss_DICE, Loss_mask and all per_pixel classes should be removed ...
     
     # Display the figure
     fig = plt.figure(figsize=(int(np.ceil(np.max(n_cols)*5.7)), int(np.ceil(n_rows*5))))                # Create the figure
@@ -153,7 +134,7 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, pq_train, pq_val, h
             for kk, key in enumerate(sorted(hist_keys[ax_count], key=str.lower)):                       # Looping through all keys in the history dict that will be shown on the current subplot axes
                 if np.max(history[key]) > y_top_val:                                                    # If the maximum value in the array is larger than the current y_top_val ...
                     y_top_val = np.ceil(np.max(history[key])/10)*10                                     # ... y_top_val is updated and rounded to the nearest 10
-                plt.plot(np.linspace(start=np.min(history["val_epoch_num"])-(0 if any([x in key for x in ["ACC", "IoU", "PQ", "RQ", "SQ"]]) else 1),    # Plot the data, using a linspace ...
+                plt.plot(np.linspace(start=np.min(history["val_epoch_num"])-(0 if "AP" in key else 1),  # Plot the data, using a linspace ...
                     stop=np.max(history["val_epoch_num"]), num=len(history[key])), history[key], color=colors[kk], linestyle="-", marker=".")   # ... argument for the x-axis and the data itself for the y-axis
             plt.legend(sorted([key for key in hist_keys[ax_count]], key=str.lower),                     # Create a legend for the subplot with ...
                     framealpha=0.35, loc="best" if len(hist_keys[ax_count])<4 else "upper left")        # ... the history keys displayed

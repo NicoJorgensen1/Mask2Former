@@ -1,16 +1,20 @@
 import os
 import re
+from importlib_metadata import metadata
 import torch
 import torch.nn as nn
 import numpy as np
-# import matplotlib
-# matplotlib.use("pdf")
 from matplotlib import pyplot as plt
 from tqdm import tqdm                                                                       # Used to set a progress bar
 from custom_register_vitrolife_dataset import vitrolife_dataset_function
-from detectron2.data import DatasetCatalog, MetadataCatalog, DatasetMapper, build_detection_train_loader
+from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader
 from mask2former import MaskFormerInstanceDatasetMapper
 from detectron2.engine.defaults import DefaultPredictor
+from detectron2.utils.visualizer import Visualizer
+
+from mask2former.modeling.matcher import HungarianMatcher
+
+
 
 # from custom_goto_trainer_class import custom_augmentation_mapper                            # A function that returns a custom mapper using data augmentation
 
@@ -95,27 +99,52 @@ def sort_dictionary_by_PN(data):
 def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False):
     if model_done_training==False: config = putModelWeights(config)                         # Change the config and append the latest model as the used checkpoint, if the model is still training
     predictor = DefaultPredictor(cfg=config)                                                # Create a default predictor instance
-    Softmax_module = nn.Softmax(dim=2)                                                      # Create a module to compute the softmax value along the final, channel, dimension of the predicted images
     if data_batch == None:                                                                  # If no batch with data was send to the function ...
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # ... and if we are using the vitrolife dataset
             dataset_dicts = vitrolife_dataset_function(data_split, debugging=True)          # ... the list of dataset_dicts from vitrolife is computed.
             dataset_dicts = dataset_dicts[:FLAGS.num_images]                                # We'll maximally show the first FLAGS.num_images images
         else: dataset_dicts = DatasetCatalog.get("ade20k_sem_seg_{:s}".format(data_split))  # Else we use the ADE20K dataset
-        if "train" in data_split: data_mapper = MaskFormerInstanceDatasetMapper(config=config, is_train=True)   # Use the custom data augmentation mapper for training images
-        # if "train" in data_split: data_mapper = custom_augmentation_mapper(config=config, is_train=True)        # Use the custom data augmentation mapper for training images
-        else: data_mapper = DatasetMapper(config, is_train=False, augmentations=[])         # Use the regular, default mapper for val+test images without any augmentation
+        if "train" in data_split:
+            augmentations = []
+        else:
+            augmentations = []
+        data_mapper = MaskFormerInstanceDatasetMapper(cfg=config, is_train=True, augmentations=augmentations)   # Use the standard instance segmentation mapper 
         dataloader = build_detection_train_loader(dataset_dicts, mapper=data_mapper, total_batch_size=np.min([FLAGS.num_images, len(dataset_dicts)]))   # Create the dataloader
         data_batch = next(iter(dataloader))                                                 # Extract the next batch from the dataloader
     img_ytrue_ypred = {"input": list(), "y_pred": list(), "y_true": list(), "PN": list()}   # Initiate a dictionary to store the input images, ground truth masks and the predicted masks
+    if "train" in data_split: meta_data = MetadataCatalog.get(config.DATASETS.TRAIN[0])
+    elif any([data_split in x for x in["val", "test"]]): meta_data = MetadataCatalog.get(config.DATASETS.TEST[0])
+
+
+
+    # Perhaps take a look at these three files here:
+    # /mnt/c/Users/Nico-/Documents/Python_Projects/Mask2Former/mask2former/modeling/matcher.py
+    # /mnt/c/Users/Nico-/Documents/Python_Projects/Mask2Former/mask2former/maskformer_model.py
+    # /mnt/c/Users/Nico-/Documents/Python_Projects/Mask2Former/mask2former/modeling/criterion.py
+
+
+
+    matcher = HungarianMatcher(cost_class=FLAGS.class_loss_weight, cost_dice=FLAGS.dice_loss_weight,
+            cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)
+
+    
     for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloader
         img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Input image [H,W,C]
-        y_true = data["sem_seg"].numpy()                                                    # Ground truth label mask [H,W]
-        y_true_col = apply_colormap(mask=y_true, config=config)                             # Ground truth color mask
-        out = predictor.__call__(img)                                                       # Predicted output dictionary. The call function needs images in BGR format.
-        out_img = torch.permute(out["sem_seg"], (1,2,0))                                    # Predicted output image [H,W,C]
-        out_img_softmax = Softmax_module(out_img)                                           # Softmax of predicted output image
-        y_pred = torch.argmax(out_img_softmax,2).cpu()                                      # Predicted output image [H,W]
-        y_pred_col = apply_colormap(mask=y_pred, config=config)                             # Predicted colormap for predicted output image
+        y_pred = predictor.__call__(img)
+
+        y_pred_matching = y_pred["instances"].get_fields()["pred_masks"]
+
+
+        matcher.forward(outputs=y_pred_matching, targets=data["instances"])
+
+
+
+        visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=0.5)
+        y_true_labeled = visualizer.draw_dataset_dict(data)
+        y_true_col = y_true_labeled.get_image()[:, :, ::-1]
+        y_pred = predictor.__call__(img)
+        y_pred_labeled = visualizer.draw_dataset_dict(y_pred)
+        y_pred_col = y_pred_labeled.get_image()[:, :, ::-1]
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
         img_ytrue_ypred["y_true"].append(y_true_col)                                        # Append the ground truth to the dictionary

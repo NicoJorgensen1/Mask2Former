@@ -41,7 +41,7 @@ def str2bool(v):
 def getBestEpochResults(history, best_epoch):
     val_to_keep = {}
     best_epoch_idx = np.max(np.argwhere(np.isin(history["val_epoch_num"], best_epoch)))
-    keys_to_use = sorted([x for x in history.keys() if all(["val" in x, "_C" not in x, "_"!=x[-3], "_"!=x[-2]]) and any([y in x for y in ["IoU", "ACC", "loss"]])], key=str.lower)
+    keys_to_use = sorted([x for x in history.keys() if "val" in x and any([y in x for y in ["AP", "loss"]])], key=str.lower)
     for key in keys_to_use:
         if "loss" in key: val_to_keep[key] = history[key][best_epoch_idx]
         if "loss" not in key: val_to_keep[key] = history[key][best_epoch-1]
@@ -72,7 +72,7 @@ def changeFLAGS(FLAGS):
         FLAGS.num_gpus = 1                                                              # ... can only be done using a single GPU for some weird reason...
         FLAGS.dataset_name = "vitrolife"                                                # ... setting the correct vitrolife dataset name
     if FLAGS.eval_only != FLAGS.inference_only: FLAGS.eval_only = FLAGS.inference_only  # As there are two inputs where "eval_only" can be set, inference_only is the superior
-    # if FLAGS.min_delta < 1.0: FLAGS.min_delta *= 100                                    # As the model outputs metrics multiplied by a factor of 100, the min_delta value must also be scaled accordingly
+    if FLAGS.min_delta < 1.0: FLAGS.min_delta *= 100                                    # As the model outputs metrics multiplied by a factor of 100, the min_delta value must also be scaled accordingly
     if FLAGS.debugging: FLAGS.eval_metric.replace("val", "train")                       # The metric used for evaluation will be a training metric, if we are debugging the model
     if FLAGS.inference_only: FLAGS.num_epochs = 1                                       # If we are only using inference, then we'll only run through one epoch
     FLAGS.num_queries = 100 if FLAGS.dataset_name=="ade20k" else 25                     # The number of queries will be set to 100 with the ADE20K dataset and 25 with the Vitrolife dataset
@@ -89,29 +89,29 @@ parser = default_argument_parser()
 start_time = datetime.now().strftime("%H_%M_%d%b%Y").upper()
 parser.add_argument("--dataset_name", type=str, default="vitrolife", help="Which datasets to train on. Choose between [ADE20K, Vitrolife]. Default: Vitrolife")
 parser.add_argument("--output_dir_postfix", type=str, default=start_time, help="Filename extension to add to the output directory of the current process. Default: now: 'HH_MM_DDMMMYYYY'")
-parser.add_argument("--eval_metric", type=str, default="val_mIoU", help="Metric to use in order to determine the 'best' model weights. Available: val_/train_ prefix to [total_loss, mIoU, fwIoU, mACC]. Default: val_fwIoU")
+parser.add_argument("--eval_metric", type=str, default="val_AP", help="Metric to use in order to determine the 'best' model weights. Default: val_AP")
 parser.add_argument("--optimizer_used", type=str, default="ADAMW", help="Optimizer to use. Available [SGD, ADAMW]. Default: ADAMW")
 parser.add_argument("--num_workers", type=int, default=6, help="Number of workers to use for training the model. Default: 4")
 parser.add_argument("--max_iter", type=int, default=int(1e5), help="Maximum number of iterations to train the model for. <<Deprecated argument. Use 'num_epochs' instead>>. Default: 100000")
 parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of the feature extracting ResNet backbone. Possible values: [18,34,50,101] Default: 101")
 parser.add_argument("--batch_size", type=int, default=1, help="The batch size used for training the model. Default: 1")
 parser.add_argument("--num_images", type=int, default=6, help="The number of images to display/segment. Default: 6")
-parser.add_argument("--num_trials", type=int, default=2, help="The number of trials to run HPO for. Only relevant if '--hp_optim==True'. Default: 300")
+parser.add_argument("--num_trials", type=int, default=5, help="The number of trials to run HPO for. Only relevant if '--hp_optim==True'. Default: 300")
 parser.add_argument("--num_random_trials", type=int, default=100, help="The number of random trials to run initiate the HPO for. Only relevant if '--hp_optim==True'. Default: 30")
 parser.add_argument("--display_rate", type=int, default=5, help="The epoch_rate of how often to display image segmentations. A display_rate of 3 means that every third epoch, visual segmentations are saved. Default: 5")
 parser.add_argument("--gpus_used", type=int, default=1, help="The number of GPU's to use for training. Only applicable for training with ADE20K. This input argument deprecates the '--num-gpus' argument. Default: 1")
-parser.add_argument("--num_epochs", type=int, default=2, help="The number of epochs to train the model for. Default: 1")
+parser.add_argument("--num_epochs", type=int, default=5, help="The number of epochs to train the model for. Default: 1")
 parser.add_argument("--warm_up_epochs", type=int, default=5, help="The number of epochs to warm up the learning rate when training. Will go from 1/100 '--learning_rate' to '--learning_rate' during these warm_up_epochs. Default: 3")
 parser.add_argument("--patience", type=int, default=5, help="The number of epochs to accept that the model hasn't improved before lowering the learning rate by a factor '--lr_gamma'. Default: 5")
 parser.add_argument("--early_stop_patience", type=int, default=13, help="The number of epochs to accept that the model hasn't improved before terminating training. Default: 12")
 parser.add_argument("--backbone_freeze_layers", type=int, default=0, help="The number of layers in the backbone to freeze when training. Available [0,1,2,3,4,5]. Default: 0")
 parser.add_argument("--dice_loss_weight", type=int, default=10, help="The weighting for the dice loss in the loss function. Default: 10")
-parser.add_argument("--mask_loss_weight", type=int, default=20, help="The weighting for the mask loss in the loss function. Default: 20")
+parser.add_argument("--mask_loss_weight", type=int, default=10, help="The weighting for the mask loss in the loss function. Default: 10")
 parser.add_argument("--class_loss_weight", type=int, default=3, help="The weighting for the classification loss in the loss function. Default: 3")
 parser.add_argument("--no_object_weight", type=float, default=0.1, help="The weighting for the 'no object' category in the loss function. Default: 0.1")
-parser.add_argument("--learning_rate", type=float, default=1e-3, help="The initial learning rate used for training the model. Default: 1e-3")
+parser.add_argument("--learning_rate", type=float, default=1e-5, help="The initial learning rate used for training the model. Default: 1e-5")
 parser.add_argument("--lr_gamma", type=float, default=0.15, help="The update factor for the learning rate when the model performance hasn't improved in 'patience' epochs. Will do new_lr=old_lr*lr_gamma. Default 0.15")
-parser.add_argument("--backbone_multiplier", type=float, default=0.25, help="The multiplier for the backbone learning rate. Backbone_lr = learning_rate * backbone_multiplier. Default: 0.20")
+parser.add_argument("--backbone_multiplier", type=float, default=0.15, help="The multiplier for the backbone learning rate. Backbone_lr = learning_rate * backbone_multiplier. Default: 0.15")
 parser.add_argument("--weight_decay", type=float, default=1e-4, help="The weight decay used for the model. Default: 1e-4")
 parser.add_argument("--min_delta", type=float, default=5e-4, help="The minimum improvement the model must have made in order to be accepted as an actual improvement. Default 5e-4")
 parser.add_argument("--ignore_background", type=str2bool, default=False, help="Whether or not we are ignoring the background class. True = Ignore background, False = reward/penalize for background predictions. Default: False")
@@ -141,7 +141,7 @@ FLAGS.num_train_files = MetadataCatalog[cfg.DATASETS.TRAIN[0]].num_files_in_data
 FLAGS.num_val_files = MetadataCatalog[cfg.DATASETS.TEST[0]].num_files_in_dataset        # Write the number of validation files to the FLAGS namespace
 FLAGS.batch_size = np.min([FLAGS.batch_size, FLAGS.num_train_files])                    # The batch size can't be greater than the number of files in the dataset
 FLAGS.epoch_iter = int(np.floor(np.divide(FLAGS.num_train_files, FLAGS.batch_size)))    # Compute the number of iterations per training epoch
-FLAGS.num_classes = len(MetadataCatalog[cfg.DATASETS.TRAIN[0]].stuff_classes)           # Get the number of classes in the current dataset
+FLAGS.num_classes = len(MetadataCatalog[cfg.DATASETS.TRAIN[0]].thing_classes)           # Get the number of classes in the current dataset
 FLAGS.available_mem_info = available_mem_info.tolist()                                  # Save the information of available GPU memory in the FLAGS variable
 cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                                      # Set the final values for the config
 

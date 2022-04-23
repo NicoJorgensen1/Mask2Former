@@ -9,3 +9,4 @@ natsort
 optuna
 opencv-python
 pandas
+sklearn 
