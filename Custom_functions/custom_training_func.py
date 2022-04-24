@@ -115,7 +115,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
 
 # logs=log_file
 # data_batches = None
-# hyperparameter_optimization = False
+# hyperparameter_optimization = True
 # epoch = 0
 # trial = None 
 
@@ -151,6 +151,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             # Validation period. Will 'train' with lr=0 on validation data, correct the metrics files and evaluate performance on validation data
             config = launch_custom_training(FLAGS=FLAGS, config=config, dataset=val_dataset, epoch=epoch, run_mode="val", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
             eval_val_results, val_loader, val_evaluator = evaluateResults(FLAGS, config, data_split="val", dataloader=val_loader, evaluator=val_evaluator) # Evaluate the result metrics on the training set
+            config.DATASETS.TRAIN = train_dataset                                                           # Set the training dataset back 
             
             # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results
             history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results["segm"],    # Create and save the learning curves ...

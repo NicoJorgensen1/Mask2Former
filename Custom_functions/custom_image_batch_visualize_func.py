@@ -37,18 +37,6 @@ try:
 except: pass
 
 
-# Define function to apply a colormap on the images
-def apply_colormap(mask, config):
-    colors_used = list(MetadataCatalog[config.DATASETS.TEST[0]].thing_colors)               # Read the colors used in the Metadatacatalog. If no colors are assigned, random colors are used
-    if "vitrolife" in config.DATASETS.TEST[0].lower():                                      # If we are working on the vitrolife dataset ...
-        labels_used = MetadataCatalog[config.DATASETS.TEST[0]].thing_dataset_id_to_contiguous_id    # ... labels_used will be read from the MetadataCatalog
-    else: labels_used = list(range(len(MetadataCatalog["ade20k_instance_train"].thing_classes)))    # Else, labels is just 0:num_classes-1
-    color_array = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)               # Allocate a RGB 3D array of zeros
-    for label_idx, label in enumerate(labels_used):                                         # Loop through each label from the labels_used found from the MetadataCatalog
-        color_array[mask == label] = colors_used[label_idx]                                 # Assign all pixels in the mask with the current label_value the colors_used[idx] value
-    return color_array                                                                      # Return the colored mask
-
-
 # Define a function to extract numbers from a string
 def extractNumbersFromString(str, dtype=float, numbersWanted=1):
     try: vals = dtype(str)                                                                  # At first, simply try to convert the string into the wanted dtype
@@ -81,7 +69,7 @@ def putModelWeights(config, delete_remaining=False):
 # Function to create directories in which the visualization results are saved
 def get_save_dirs(config, dataset_split):
     for data_split in ["train", "val", "test"]:
-        if "vitrolife" not in config.DATASETS.TRAIN[0].lower() and data_split=="test": continue     # There are no test dataset for the ade20k
+        if "vitrolife" not in config.DATASETS.TRAIN[0].lower() and data_split=="test": continue     # There are no test dataset for the ade20k dataset 
         os.makedirs(os.path.join(config.OUTPUT_DIR, "Visualizations", data_split), exist_ok=True)   # Create a folder to store the segmentations of the images
     return os.path.join(config.OUTPUT_DIR, "Visualizations", dataset_split)                         # Return the folder name of the current dataset split
 
@@ -136,8 +124,9 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         data_mapper = MaskFormerInstanceDatasetMapper(cfg=config, is_train=True, augmentations=augmentations)   # Use the standard instance segmentation mapper 
         dataloader = build_detection_train_loader(dataset_dicts, mapper=data_mapper, total_batch_size=np.min([FLAGS.num_images, len(dataset_dicts)]))   # Create the dataloader
         data_batch = next(iter(dataloader))                                                 # Extract the next batch from the dataloader
-    if "train" in data_split: meta_data = MetadataCatalog.get(config.DATASETS.TRAIN[0])
-    elif any([data_split in x for x in["val", "test"]]): meta_data = MetadataCatalog.get(config.DATASETS.TEST[0])
+    dataset_name = config.DATASETS.TRAIN[0] if "train" in data_split else config.DATASETS.TEST[0]
+    if "train" in data_split: meta_data = MetadataCatalog.get(dataset_name)
+    elif any([data_split in x for x in["val", "test"]]): meta_data = MetadataCatalog.get(dataset_name)
 
 
 
@@ -153,23 +142,29 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
     # model = build_model(cfg=config)
 
     img_ytrue_ypred = {"input": list(), "y_pred": list(), "y_true": list(), "PN": list()}   # Initiate a dictionary to store the input images, ground truth masks and the predicted masks
+    class_colors = meta_data.thing_colors                                                   # Get the colors that the classes must be visualized with 
     for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloade
         img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Input image [H,W,C]
-        # visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)
+        # # visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)
+        # true_classes = data["instances"].get_fields()["gt_classes"]
+        # true_masks = data["instances"].get_fields()["gt_masks"]
+        # y_true_col = np.zeros(shape=(true_classes.shape[:2]))
+        # for true_class, true_mask, col in zip(true_classes, true_masks, class_colors):
+        #     pass
 
-        # y_true_labeled = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
-        visualizer = My_Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)        
-        y_true_labeled, masks, boxes, labels = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
-        y_true_col = y_true_labeled.get_image()[:, :, ::-1]
-        y_pred = predictor.__call__(img)
-        y_pred_labeled, masks, boxes, labels = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
-        y_pred_col = y_pred_labeled.get_image()[:, :, ::-1]
+        # # y_true_labeled = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
+        # visualizer = My_Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)        
+        # y_true_labeled, masks, boxes, labels = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
+        # y_true_col = y_true_labeled.get_image()[:, :, ::-1]
+        # y_pred = predictor.__call__(img)
+        # y_pred_labeled, masks, boxes, labels = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
+        # y_pred_col = y_pred_labeled.get_image()[:, :, ::-1]
 
 
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
-        img_ytrue_ypred["y_true"].append(y_true_col)                                        # Append the ground truth to the dictionary
-        img_ytrue_ypred["y_pred"].append(y_pred_col)                                        # Append the predicted mask to the dictionary
+        img_ytrue_ypred["y_true"].append(img)                                        # Append the ground truth to the dictionary
+        img_ytrue_ypred["y_pred"].append(img)                                        # Append the predicted mask to the dictionary
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are visualizing the vitrolife dataset
             img_ytrue_ypred["PN"].append(int(data["image_custom_info"]["PN_image"]))        # Read the true number of PN on the current image
     return img_ytrue_ypred, data_batch, FLAGS, config
