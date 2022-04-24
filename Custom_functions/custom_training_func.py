@@ -108,6 +108,12 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
     return config, FLAGS
 
 
+# logs=log_file
+# data_batches = None
+# hyperparameter_optimization = False
+# epoch = 0
+# trial = None 
+
 # Create function to train the objective function
 def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparameter_optimization=False):
     # Setup training variables before starting training

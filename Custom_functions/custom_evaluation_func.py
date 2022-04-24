@@ -8,10 +8,10 @@ from detectron2.modeling import build_model
 from detectron2.data import build_detection_test_loader
 
 
-data_split="train"
-dataloader=None
-evaluator=None
-hp_optim=False
+# data_split="train"
+# dataloader=None
+# evaluator=None
+# hp_optim=False
 
 
 # Build evaluator to compute the evaluation metrics 

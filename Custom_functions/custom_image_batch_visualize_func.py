@@ -11,7 +11,7 @@ from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_tra
 from mask2former import MaskFormerInstanceDatasetMapper
 from detectron2.engine.defaults import DefaultPredictor
 from detectron2.utils.visualizer import Visualizer
-
+from detectron2.modeling import build_model
 from mask2former.modeling.matcher import HungarianMatcher
 
 
@@ -124,18 +124,25 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
 
 
 
-    matcher = HungarianMatcher(cost_class=FLAGS.class_loss_weight, cost_dice=FLAGS.dice_loss_weight,
-            cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)
+    # matcher = HungarianMatcher(cost_class=FLAGS.class_loss_weight, cost_dice=FLAGS.dice_loss_weight,
+    #         cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)
+    # model = build_model(cfg=config)
 
     
     for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloader
+        # out = model([data])
+
         img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Input image [H,W,C]
-        y_pred = predictor.__call__(img)
+        # y_pred = predictor.__call__(img)
 
-        y_pred_matching = y_pred["instances"].get_fields()["pred_masks"]
+        # y_pred_matching = y_pred["instances"].get_fields()["pred_classes"]
+        # y_pred_cls = y_pred["instances"].get_fields()["pred_classes"].to(torch.float(32))
+        # y_pred_masks = y_pred["instances"].get_fields()["pred_masks"].to(torch.float32)
+        # model.instance_inference(mask_cls=y_pred_cls, mask_pred=y_pred_masks)
 
 
-        matcher.forward(outputs=y_pred_matching, targets=data["instances"])
+
+        # matcher.forward(outputs=y_pred_matching, targets=data["instances"])
 
 
 
@@ -153,6 +160,12 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             img_ytrue_ypred["PN"].append(int(data["image_custom_info"]["PN_image"]))        # Read the true number of PN on the current image
     return img_ytrue_ypred, data_batch, FLAGS, config
 
+
+# position=[0.55, 0.08, 0.40, 0.75]
+# epoch_num = None
+# data_batches = None
+# data_batch=None
+# model_done_training = False 
 
 # Define function to plot the images
 def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False):
