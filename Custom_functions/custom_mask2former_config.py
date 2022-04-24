@@ -31,7 +31,7 @@ def createVitrolifeConfiguration(FLAGS):
     add_deeplab_config(cfg)
     add_maskformer2_config(cfg)
     if FLAGS.use_transformer_backbone==True:                                                        # If the user chose the transformer backbone ...
-        swin_type = "large" if "nico" in Mask2Former_dir.lower() else "base"                        # If on home computer, use swin tiny. If on gpucluster, use swin large
+        swin_type = "tiny" if "nico" in Mask2Former_dir.lower() else "large"                        # If on home computer, use swin tiny. If on gpucluster, use swin large
         swin_config = [x for x in os.listdir(os.path.join(config_folder, "swin")) if all([swin_type in x, x.endswith(".yaml")])][-1]    # Find the corresponding swin config
         cfg.merge_from_file(os.path.join(config_folder, "swin", swin_config))                       # Merge the configuration with the swin configuration
     else:                                                                                           # If we are not using the swin backbone ...
