@@ -57,7 +57,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
     # If we are performing hyperparameter optimization, the config should be updated
     if all([hpt_opt==True, trial is not None, FLAGS.hp_optim==True]):
         lr = trial.suggest_float(name="learning_rate", low=1e-8, high=1e-3)
-        batch_size = trial.suggest_int(name="batch_size", low=1, high=1 if "nico" in os.getenv("DETECTRON2_DATASETS").lower() else int(np.ceil(np.min(FLAGS.available_mem_info)/1250)))
+        batch_size = trial.suggest_int(name="batch_size", low=1, high=1 if "nico" in os.getenv("DETECTRON2_DATASETS").lower() else int(np.ceil(np.min(FLAGS.available_mem_info)/1750)))
         optimizer_used = trial.suggest_categorical(name="optimizer_used", choices=["ADAMW", "SGD"])
         weight_decay = trial.suggest_float(name="weight_decay", low=1e-8, high=2e-2)
         dice_loss_weight = trial.suggest_float(name="dice_loss_weight", low=1, high=25)
