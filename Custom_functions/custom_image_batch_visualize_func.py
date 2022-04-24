@@ -1,11 +1,11 @@
 import os
 import re
-from importlib_metadata import metadata
 import torch
-import torch.nn as nn
 import numpy as np
+import cv2
 from matplotlib import pyplot as plt
 from tqdm import tqdm                                                                       # Used to set a progress bar
+from copy import deepcopy
 from custom_register_vitrolife_dataset import vitrolife_dataset_function
 from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader
 from mask2former import MaskFormerInstanceDatasetMapper
@@ -83,31 +83,6 @@ def sort_dictionary_by_PN(data):
     return new_data
 
 
-class My_Visualizer(Visualizer):
-    def draw_instance_predictions(self, predictions):
-        boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
-        scores = predictions.scores if predictions.has("scores") else None
-        classes = predictions.pred_classes.tolist() if predictions.has("pred_classes") else None
-        labels = _create_text_labels(classes, scores, self.metadata.get("thing_classes", None))
-        keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
-
-        masks = np.asarray(predictions.pred_masks)
-        masks = [GenericMask(x, self.output.height, self.output.width) for x in masks]
-
-        colors = [self._jitter([x / 255 for x in self.metadata.thing_colors[c]]) for c in classes]
-        alpha = 0.8
-
-        self.overlay_instances(
-            masks=masks,
-            boxes=boxes,
-            labels=labels,
-            keypoints=keypoints,
-            assigned_colors=colors,
-            alpha=alpha,
-        )
-        return self.output, masks, boxes, labels
-
-
 # Define a function to predict some label-masks for the dataset
 def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False):
     if model_done_training==False: config = putModelWeights(config)                         # Change the config and append the latest model as the used checkpoint, if the model is still training
@@ -137,34 +112,59 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
 
 
 
-    # matcher = HungarianMatcher(cost_class=FLAGS.class_loss_weight, cost_dice=FLAGS.dice_loss_weight,
-    #         cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)
-    # model = build_model(cfg=config)
+    matcher = HungarianMatcher(cost_class=FLAGS.class_loss_weight, cost_dice=FLAGS.dice_loss_weight,
+            cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)
+    model = build_model(cfg=config)
 
     img_ytrue_ypred = {"input": list(), "y_pred": list(), "y_true": list(), "PN": list()}   # Initiate a dictionary to store the input images, ground truth masks and the predicted masks
     class_colors = meta_data.thing_colors                                                   # Get the colors that the classes must be visualized with 
+    class_names = deepcopy(meta_data.thing_classes)                                         # Read the class names present in the dataset
     for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloade
-        img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Input image [H,W,C]
-        # # visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)
-        # true_classes = data["instances"].get_fields()["gt_classes"]
-        # true_masks = data["instances"].get_fields()["gt_masks"]
-        # y_true_col = np.zeros(shape=(true_classes.shape[:2]))
-        # for true_class, true_mask, col in zip(true_classes, true_masks, class_colors):
-        #     pass
+        # The input image
+        img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Make input image numpy format and [H,W,C]
+        
+        # The ground truth prediction image 
+        true_classes = data["instances"].get_fields()["gt_classes"]                         # Get the true class labels for the instances on the current image
+        true_masks = data["instances"].get_fields()["gt_masks"]                             # Get the true binary masks for the instances on the current image
+        y_true = np.zeros(shape=tuple(true_masks.shape[-2:])+(3,), dtype=np.uint8)          # Initiate a colored image to show the true masks
+        PN_count = 0                                                                        # Make a counter to keep track of the PN's in the current image
+        for true_class, true_mask in zip(true_classes, true_masks):                         # Iterate through the true objects in the current image
+            true_class = true_class.numpy().item()                                          # Extract the current objects true class label as a scalar 
+            class_name = class_names[true_class]                                            # Find the class label of the current object 
+            col_idx = np.where(np.in1d(class_names, class_name))[0].item() + PN_count       # Compute which color the current object will have in the final image 
+            col = class_colors[col_idx]                                                     # Extract the thing color needed for the current object
+            if class_name == "PN":                                                          # If the current object is a PN ...
+                PN_count += 1                                                               # ... increase the PN counter
+            true_mask = true_mask.numpy()                                                   # Convert the true binary mask from a torch tensor to a numpy tensor 
+            y_true[true_mask] = col                                                         # Assign all pixels from the current object with the specified pixel color value 
+            bbox_coordinates = np.asarray(np.where(true_mask))                              # Get all pixel coordinates for the true pixels in the mask
+            x1, y1 = np.amin(bbox_coordinates, axis=1)                                      # Extract the minimum x and y true pixel values
+            x2, y2 = np.amax(bbox_coordinates, axis=1)                                      # Extract the maximum x and y true pixel values
+            y_true = cv2.rectangle(y_true, (y1,x1), (y2,x2),col, 2)                         # Overlay the bounding box for the current object on the current image 
+        # plt.imshow(y_true)
+        # plt.title("Image with {} PN".format(data["image_custom_info"]["PN_image"]))
+        # plt.show(block=False)
 
-        # # y_true_labeled = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
-        # visualizer = My_Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)        
-        # y_true_labeled, masks, boxes, labels = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
-        # y_true_col = y_true_labeled.get_image()[:, :, ::-1]
+        # The predicted image 
+        y_pred = predictor.__call__(img)                                                    # y_pred is a dict with keys "instances"
+        y_pred_2 = y_pred["instances"]                                                      # y_pred_2 is a detectron2.structures.instances.Instances object
+        y_pred_3 = y_pred_2.get_fields()                                                    # y_pred_3 is a dict with keys ['pred_masks', 'pred_boxes', 'scores', 'pred_classes']
+        pred_masks = y_pred_3["pred_masks"]                                                 # pred_masks is a tensor of shape [100, H, W] of float values
+        pred_boxes = y_pred_3["pred_boxes"].tensor                                          # pred_boxes is a tensor of shape [100, 4] containing float values 
+        pred_scores = y_pred_3["scores"]                                                    # pred_scores is a tensor of shape [100] containing 0<score<1 float values
+        pred_classes = y_pred_3["pred_classes"]                                             # pred_classes is a tensor of shape [100] only containing integer class_id's
+
+
+        # visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)        
         # y_pred = predictor.__call__(img)
-        # y_pred_labeled, masks, boxes, labels = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
+        # y_pred_labeled = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
         # y_pred_col = y_pred_labeled.get_image()[:, :, ::-1]
 
 
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
-        img_ytrue_ypred["y_true"].append(img)                                        # Append the ground truth to the dictionary
-        img_ytrue_ypred["y_pred"].append(img)                                        # Append the predicted mask to the dictionary
+        img_ytrue_ypred["y_true"].append(y_true)                                            # Append the ground truth to the dictionary
+        img_ytrue_ypred["y_pred"].append(img)                               # Append the predicted mask to the dictionary
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are visualizing the vitrolife dataset
             img_ytrue_ypred["PN"].append(int(data["image_custom_info"]["PN_image"]))        # Read the true number of PN on the current image
     return img_ytrue_ypred, data_batch, FLAGS, config
