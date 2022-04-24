@@ -131,27 +131,22 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
     
     for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloader
         # out = model([data])
-
-        img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Input image [H,W,C]
         # y_pred = predictor.__call__(img)
-
         # y_pred_matching = y_pred["instances"].get_fields()["pred_classes"]
         # y_pred_cls = y_pred["instances"].get_fields()["pred_classes"].to(torch.float(32))
         # y_pred_masks = y_pred["instances"].get_fields()["pred_masks"].to(torch.float32)
         # model.instance_inference(mask_cls=y_pred_cls, mask_pred=y_pred_masks)
-
-
-
         # matcher.forward(outputs=y_pred_matching, targets=data["instances"])
 
-
-
+        img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Input image [H,W,C]
         visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=0.5)
         y_true_labeled = visualizer.draw_dataset_dict(data)
         y_true_col = y_true_labeled.get_image()[:, :, ::-1]
+
         y_pred = predictor.__call__(img)
-        y_pred_labeled = visualizer.draw_dataset_dict(y_pred)
+        y_pred_labeled = visualizer.draw_instance_predictions(y_pred["instances"].to("cpu"))
         y_pred_col = y_pred_labeled.get_image()[:, :, ::-1]
+
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
         img_ytrue_ypred["y_true"].append(y_true_col)                                        # Append the ground truth to the dictionary
@@ -166,6 +161,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
 # data_batches = None
 # data_batch=None
 # model_done_training = False 
+# data_split = "train"
 
 # Define function to plot the images
 def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False):
