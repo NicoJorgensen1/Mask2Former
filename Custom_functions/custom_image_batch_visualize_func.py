@@ -124,6 +124,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Make input image numpy format and [H,W,C]
         
         # The ground truth prediction image 
+        # Make this into a function that accepts a list of class labels and masks and boxes (should allow for boxes=None)
         true_classes = data["instances"].get_fields()["gt_classes"]                         # Get the true class labels for the instances on the current image
         true_masks = data["instances"].get_fields()["gt_masks"]                             # Get the true binary masks for the instances on the current image
         y_true = np.zeros(shape=tuple(true_masks.shape[-2:])+(3,), dtype=np.uint8)          # Initiate a colored image to show the true masks
@@ -153,6 +154,11 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         pred_boxes = y_pred_3["pred_boxes"].tensor                                          # pred_boxes is a tensor of shape [100, 4] containing float values 
         pred_scores = y_pred_3["scores"]                                                    # pred_scores is a tensor of shape [100] containing 0<score<1 float values
         pred_classes = y_pred_3["pred_classes"]                                             # pred_classes is a tensor of shape [100] only containing integer class_id's
+
+        ### DO SOMETHING WITH THE HUNGARIAN MATCHING CLASS
+        ### CREATE MY OWN INSTANCE AND CHANGE FAST_FORWARD FUNCTION TO ACCEPT THESE OUTPUTS
+        ### THEN THE MATCHING WILL TELL WHICH OF THE PREDICTIONS SHOULD BE USED
+        ### WHEN WE KNOW WHICH PREDICTIONS TO USE, WE CAN CREATE AN IMAGE SIMILAR TO THE Y_TRUE IMAGE 
 
 
         # visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)        

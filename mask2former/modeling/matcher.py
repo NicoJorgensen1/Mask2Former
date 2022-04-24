@@ -167,10 +167,7 @@ class HungarianMatcher(nn.Module):
             indices.append(linear_sum_assignment(C))
             # print("\nThe indices for this {}. batch have shape {}\n {}".format(b, C.shape, C))              # C is a tensor of shape [num_queries, num_classes] 
 
-        return [
-            (torch.as_tensor(i, dtype=torch.int64), torch.as_tensor(j, dtype=torch.int64))
-            for i, j in indices
-        ]
+        return [(torch.as_tensor(i, dtype=torch.int64), torch.as_tensor(j, dtype=torch.int64)) for i, j in indices]
 
     @torch.no_grad()
     def forward(self, outputs, targets):
