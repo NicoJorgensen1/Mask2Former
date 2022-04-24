@@ -138,8 +138,8 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         # matcher.forward(outputs=y_pred_matching, targets=data["instances"])
 
         img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Input image [H,W,C]
-        visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=0.5)
-        y_true_labeled = visualizer.draw_dataset_dict(data)
+        visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)
+        y_true_labeled = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
         y_true_col = y_true_labeled.get_image()[:, :, ::-1]
 
         y_pred = predictor.__call__(img)
@@ -149,7 +149,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
         img_ytrue_ypred["y_true"].append(y_true_col)                                        # Append the ground truth to the dictionary
-        img_ytrue_ypred["y_pred"].append(y_pred_col)                                        # Append the predicted mask to the dictionary
+        img_ytrue_ypred["y_pred"].append(img)                                        # Append the predicted mask to the dictionary
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are visualizing the vitrolife dataset
             img_ytrue_ypred["PN"].append(int(data["image_custom_info"]["PN_image"]))        # Read the true number of PN on the current image
     return img_ytrue_ypred, data_batch, FLAGS, config
@@ -166,7 +166,8 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
 def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False):
     # Get the datasplit and number of images to show
     fig_list, data_batches_final = list(), list()                                           # Initiate the list to store the figures in
-    if data_batches==None: data_batches = [None, None, None]                                # If no previous data has been sent, it must be a list of None's...
+    if data_batches==None:                                                                  # If no previous data has been sent ...
+        data_batches = [None, None, None]                                                   # ... it must be a list of None's...
     data_split_count = 1                                                                    # Initiate the datasplit counter
     fontdict = {'fontsize': 25}                                                             # Set the font size for the plot
     for data_split, data_batch in tqdm(zip(["train", "val", "test"], data_batches),         # Iterate through the three splits available
