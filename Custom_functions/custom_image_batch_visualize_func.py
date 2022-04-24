@@ -111,7 +111,6 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         data_mapper = MaskFormerInstanceDatasetMapper(cfg=config, is_train=True, augmentations=augmentations)   # Use the standard instance segmentation mapper 
         dataloader = build_detection_train_loader(dataset_dicts, mapper=data_mapper, total_batch_size=np.min([FLAGS.num_images, len(dataset_dicts)]))   # Create the dataloader
         data_batch = next(iter(dataloader))                                                 # Extract the next batch from the dataloader
-    img_ytrue_ypred = {"input": list(), "y_pred": list(), "y_true": list(), "PN": list()}   # Initiate a dictionary to store the input images, ground truth masks and the predicted masks
     if "train" in data_split: meta_data = MetadataCatalog.get(config.DATASETS.TRAIN[0])
     elif any([data_split in x for x in["val", "test"]]): meta_data = MetadataCatalog.get(config.DATASETS.TEST[0])
 
@@ -128,7 +127,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
     #         cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)
     # model = build_model(cfg=config)
 
-    
+    img_ytrue_ypred = {"input": list(), "y_pred": list(), "y_true": list(), "PN": list()}   # Initiate a dictionary to store the input images, ground truth masks and the predicted masks
     for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloader
         # out = model([data])
         # y_pred = predictor.__call__(img)
