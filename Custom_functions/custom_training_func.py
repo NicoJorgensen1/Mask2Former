@@ -58,7 +58,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
     if all([hpt_opt==True, trial is not None, FLAGS.hp_optim==True]):
         # Set limits on the possible HPO values 
         batch_size_max = 1
-        if FLAGS.use_transformer_backbone==True: batch_size_max = np.max([1, int(np.floor(np.min(FLAGS.available_mem_info)/6500))])
+        if FLAGS.use_transformer_backbone==True: batch_size_max = np.max([1, int(np.floor(np.min(FLAGS.available_mem_info)/12500))])
         else: batch_size_max = int(np.ceil(np.min(FLAGS.available_mem_info)/1250))
         
         lr = trial.suggest_float(name="learning_rate", low=1e-8, high=1e-3)
