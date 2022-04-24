@@ -97,22 +97,22 @@ class HungarianMatcher(nn.Module):
         """More memory-friendly matching"""
         bs, num_queries = outputs["pred_logits"].shape[:2]
 
-        # import time 
-        # print("\n\n\n")
-        # # The output is a dictionary with keys ["pred_logits", "pred_masks"], both torch.tensors of [batch_size, num_queries, (num_classes) or (mask_pred_H, mask_pred_W)] 
-        # print("The output is of type: {}".format(type(outputs))) 
-        # print("The output 'pred_logits' is of shape: {}".format((outputs["pred_logits"].shape)))
-        # print("The output 'pred_masks' is of shape: {}".format((outputs["pred_masks"].shape)))
-        # time.sleep(2)
+        import time 
+        print("\n\n\n\n")
+        # The output is a dictionary with keys ["pred_logits", "pred_masks"], both torch.tensors of [batch_size, num_queries, (num_classes) or (mask_pred_H, mask_pred_W)] 
+        print("The output is of type: {}".format(type(outputs))) 
+        print("The output 'pred_logits' is of shape: {}".format((outputs["pred_logits"].shape)))
+        print("The output 'pred_masks' is of shape: {}".format((outputs["pred_masks"].shape)))
+        time.sleep(2)
 
-        # # The targets is a list of length 1 (=batch_size) and is a dictionary with keys ["labels, masks"] both tensors of shape [num_instances] and [num_instances, img_H, img_W]
-        # print("The targets is of type: {} with len {}".format(type(targets), len(targets)))
-        # print("The 'labels' is of type: {}".format(type(targets[0]["labels"])))
-        # print("The 'masks' is of type: {}".format(type(targets[0]["masks"])))
-        # print("The targets 'labels' is of shape: {}".format(targets[0]["labels"].shape))
-        # print("The targets 'masks' is of shape: {}".format(targets[0]["masks"].shape))
-        # print()
-        # time.sleep(2)
+        # The targets is a list of length 1 (=batch_size) and is a dictionary with keys ["labels, masks"] both tensors of shape [num_instances] and [num_instances, img_H, img_W]
+        print("\nThe targets is of type: {} with len {}".format(type(targets), len(targets)))
+        print("The 'labels' is of type: {}".format(type(targets[0]["labels"])))
+        print("The 'masks' is of type: {}".format(type(targets[0]["masks"])))
+        print("The targets 'labels' is of shape: {}".format(targets[0]["labels"].shape))
+        print("The targets 'masks' is of shape: {}".format(targets[0]["masks"].shape))
+        print()
+        time.sleep(2)
 
         indices = []
 
@@ -165,6 +165,7 @@ class HungarianMatcher(nn.Module):
             )
             C = C.reshape(num_queries, -1).cpu()
             indices.append(linear_sum_assignment(C))
+            print("\nThe indices for this {}. batch are {}".format(b, C))
 
         return [
             (torch.as_tensor(i, dtype=torch.int64), torch.as_tensor(j, dtype=torch.int64))

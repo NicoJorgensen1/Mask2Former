@@ -10,7 +10,7 @@ from custom_register_vitrolife_dataset import vitrolife_dataset_function
 from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader
 from mask2former import MaskFormerInstanceDatasetMapper
 from detectron2.engine.defaults import DefaultPredictor
-from detectron2.utils.visualizer import Visualizer
+from detectron2.utils.visualizer import Visualizer, ColorMode, _create_text_labels, GenericMask
 from detectron2.modeling import build_model
 from mask2former.modeling.matcher import HungarianMatcher
 
@@ -95,6 +95,31 @@ def sort_dictionary_by_PN(data):
     return new_data
 
 
+class My_Visualizer(Visualizer):
+    def draw_instance_predictions(self, predictions):
+        boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
+        scores = predictions.scores if predictions.has("scores") else None
+        classes = predictions.pred_classes.tolist() if predictions.has("pred_classes") else None
+        labels = _create_text_labels(classes, scores, self.metadata.get("thing_classes", None))
+        keypoints = predictions.pred_keypoints if predictions.has("pred_keypoints") else None
+
+        masks = np.asarray(predictions.pred_masks)
+        masks = [GenericMask(x, self.output.height, self.output.width) for x in masks]
+
+        colors = [self._jitter([x / 255 for x in self.metadata.thing_colors[c]]) for c in classes]
+        alpha = 0.8
+
+        self.overlay_instances(
+            masks=masks,
+            boxes=boxes,
+            labels=labels,
+            keypoints=keypoints,
+            assigned_colors=colors,
+            alpha=alpha,
+        )
+        return self.output, masks, boxes, labels
+
+
 # Define a function to predict some label-masks for the dataset
 def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False):
     if model_done_training==False: config = putModelWeights(config)                         # Change the config and append the latest model as the used checkpoint, if the model is still training
@@ -128,28 +153,23 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
     # model = build_model(cfg=config)
 
     img_ytrue_ypred = {"input": list(), "y_pred": list(), "y_true": list(), "PN": list()}   # Initiate a dictionary to store the input images, ground truth masks and the predicted masks
-    for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloader
-        # out = model([data])
-        # y_pred = predictor.__call__(img)
-        # y_pred_matching = y_pred["instances"].get_fields()["pred_classes"]
-        # y_pred_cls = y_pred["instances"].get_fields()["pred_classes"].to(torch.float(32))
-        # y_pred_masks = y_pred["instances"].get_fields()["pred_masks"].to(torch.float32)
-        # model.instance_inference(mask_cls=y_pred_cls, mask_pred=y_pred_masks)
-        # matcher.forward(outputs=y_pred_matching, targets=data["instances"])
-
+    for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloade
         img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Input image [H,W,C]
-        visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)
-        y_true_labeled = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
-        y_true_col = y_true_labeled.get_image()[:, :, ::-1]
+        # visualizer = Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)
 
+        # y_true_labeled = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
+        visualizer = My_Visualizer(img[:, :, ::-1], metadata=meta_data, scale=1)        
+        y_true_labeled, masks, boxes, labels = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
+        y_true_col = y_true_labeled.get_image()[:, :, ::-1]
         y_pred = predictor.__call__(img)
-        y_pred_labeled = visualizer.draw_instance_predictions(y_pred["instances"].to("cpu"))
+        y_pred_labeled, masks, boxes, labels = visualizer.draw_instance_predictions(data["instances"].to("cpu"))
         y_pred_col = y_pred_labeled.get_image()[:, :, ::-1]
+
 
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
         img_ytrue_ypred["y_true"].append(y_true_col)                                        # Append the ground truth to the dictionary
-        img_ytrue_ypred["y_pred"].append(img)                                        # Append the predicted mask to the dictionary
+        img_ytrue_ypred["y_pred"].append(y_pred_col)                                        # Append the predicted mask to the dictionary
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are visualizing the vitrolife dataset
             img_ytrue_ypred["PN"].append(int(data["image_custom_info"]["PN_image"]))        # Read the true number of PN on the current image
     return img_ytrue_ypred, data_batch, FLAGS, config
