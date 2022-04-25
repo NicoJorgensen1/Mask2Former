@@ -57,9 +57,10 @@ def save_dictionary(dictObject, save_folder, dictName):                         
 
 # Write the new config as a .yaml file
 def write_config_to_file(config):
-    config = deepcopy(config)
-    config.pop("custom_key")
-    with open(os.path.join(config.OUTPUT_DIR, "config_file.yaml"), "w") as f:           # Open a object instance with the config file
+    config = deepcopy(config)                                                           # Make a hard copy of the config
+    config.pop("custom_key")                                                            # Remove the "custom_key" key-set
+    config_prefix = "vitrolife_" if "vitrolife" in config.DATASETS.TRAIN[0] else ""     # Prepend 'vitrolife' to the config filename, if we are using the Vitrolife dataset
+    with open(os.path.join(config.OUTPUT_DIR, "{}config_file.yaml".format(config_prefix)), "w") as f:   # Open a object instance with the config file
         f.write(config.dump())                                                          # Dump the configuration to a file named config_name in cfg.OUTPUT_DIR
     f.close()                                                                           # Close the writer handle again 
 

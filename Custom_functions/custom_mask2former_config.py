@@ -107,6 +107,7 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     # Test values 
     cfg.TEST.EVAL_PERIOD = 0                                                                        # We won't use the build in evaluation, only the custom evaluation function
     cfg.TEST.AUG = False                                                                            # No augmentation used for inference
+    cfg.TEST.DETECTIONS_PER_IMAGE = FLAGS.num_queries                                               # At test time the model will also only output num_queries detections pr image
 
     # Debugging value changes
     if FLAGS.debugging==True:                                                                       # If we are debugging the model ...

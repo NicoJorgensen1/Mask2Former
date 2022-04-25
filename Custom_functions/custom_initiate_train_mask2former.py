@@ -35,11 +35,13 @@ from custom_training_func import get_HPO_params                                 
 
 #####
 ##### Precision and Recall metrics are missing for the evaluation 
+##### Draw a precision-recall curve
 ##### 
 
 
 # Get the FLAGS, the config and the logfile. 
 FLAGS, cfg, trial, log_file = perform_HPO()                                                             # Perform HPO if that is chosen 
+write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
 cfg, FLAGS = get_HPO_params(config=cfg, FLAGS=FLAGS, trial=trial, hpt_opt=False)                        # Update the config and the FLAGS with the best found parameters 
 printAndLog(input_to_write="FLAGS input arguments:", logs=log_file)                                     # Print the new, updated FLAGS ...
 printAndLog(input_to_write={key: vars(FLAGS)[key] for key in sorted(vars(FLAGS).keys())},               # ...  input arguments to the logfile ...
@@ -60,7 +62,6 @@ printAndLog(input_to_write="Now training is completed", logs=log_file)
 
 # Visualize the same images, now after training
 cfg = keepAllButLatestAndBestModel(config=cfg, history=history, FLAGS=FLAGS, bestOrLatest="best")       # Put the model weights for the best performing model on the config
-write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
 
 # Print and log the best metric results
 printAndLog(input_to_write="Final results:".upper(), logs=log_file)
@@ -72,9 +73,9 @@ if "vitrolife" in FLAGS.dataset_name.lower():                                   
     printAndLog(input_to_write="All test results:".upper().ljust(30), logs=log_file)
     printAndLog(input_to_write=test_history, logs=log_file, prefix="", length=15)
 
-# Remove all metrics.json files, the default log-file and zip the resulting output directory
-[os.remove(os.path.join(cfg.OUTPUT_DIR, x)) for x in os.listdir(cfg.OUTPUT_DIR) if "metrics" in x.lower() and x.endswith(".json")]
-os.remove(os.path.join(cfg.OUTPUT_DIR, "log.txt"))
-zip_output(cfg)
-
+# Remove all metrics.json files and the default log-file and write config to file, visualize the images and zip output directory
+[os.remove(os.path.join(cfg.OUTPUT_DIR, x)) for x in os.listdir(cfg.OUTPUT_DIR) if "metrics" in x.lower() and x.endswith(".json")]  # Remove all metrics files
+os.remove(os.path.join(cfg.OUTPUT_DIR, "log.txt"))                                                      # Remove the original log file 
+write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
 visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True)       # Visualize the images again after training 
+zip_output(cfg)                                                                                         # Zip the final output dir
