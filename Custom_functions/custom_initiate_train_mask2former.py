@@ -32,13 +32,6 @@ from custom_image_batch_visualize_func import visualize_the_images              
 from custom_HPO_func import perform_HPO                                                                 # Function to perform HPO and read the input variables
 
 
-##### Need a better way to visualize the image batch
-    # Perhaps take a look at these three files here:
-    # /mnt/c/Users/Nico-/Documents/Python_Projects/Mask2Former/mask2former/modeling/matcher.py
-    # /mnt/c/Users/Nico-/Documents/Python_Projects/Mask2Former/mask2former/maskformer_model.py
-    # /mnt/c/Users/Nico-/Documents/Python_Projects/Mask2Former/mask2former/modeling/criterion.py
-    # Or check out this implementation from scipy => remember how the HungarianMatcher class computes the cost matrix, C ... 
-        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html
 ##### Try-except from both HPO function and custom_train_func needs to be in-commented again 
 
 
@@ -54,7 +47,8 @@ printAndLog(input_to_write="Model analysis:".upper(), logs=log_file)            
 printAndLog(input_to_write=model_analysis, logs=log_file, oneline=False, length=27)                     # ... and write it to the logfile
 
 # Visualize some random images before training 
-fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS)               # Visualize some segmentations on random images before training
+try: fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS, device=cfg.MODEL.DEVICE) # Visualize some segmentations ...
+except: fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS, device="cpu") # ... on random images before training
 
 # Train the model with the best found hyperparameters
 history, test_history, new_best, best_epoch, cfg = objective_train_func(trial=trial, FLAGS=FLAGS,       # Start the training with ...
@@ -63,7 +57,8 @@ history, test_history, new_best, best_epoch, cfg = objective_train_func(trial=tr
 # Visualize the same images, now after training
 cfg = keepAllButLatestAndBestModel(cfg=cfg, history=history, FLAGS=FLAGS, bestOrLatest="best")          # Put the model weights for the best performing model on the config
 write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
-visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True)       # Visualize the images again
+try: visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True, device=cfg.MODEL.DEVICE)     # Visualize the images again, trying to use GPU 
+except: visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True, device="cpu") # Visualize the images again, this time using slower cpu 
 
 # Print and log the best metric results
 printAndLog(input_to_write="Final results:".upper(), logs=log_file)

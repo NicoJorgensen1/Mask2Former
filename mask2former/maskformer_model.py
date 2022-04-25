@@ -221,7 +221,8 @@ class MaskFormer(nn.Module):
             # upsample masks
             mask_pred_results = F.interpolate(
                 mask_pred_results,
-                size=(images.tensor.shape[-2], images.tensor.shape[-1]),
+                # size=(images.tensor.shape[-2], images.tensor.shape[-1]),
+                size=(500,500),
                 mode="bilinear",
                 align_corners=False,
             )

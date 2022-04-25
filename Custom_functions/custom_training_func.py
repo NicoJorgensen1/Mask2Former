@@ -7,11 +7,10 @@ from copy import  deepcopy                                                      
 from detectron2.utils import comm                                                                           # Something with GPU processing
 from detectron2.utils.logger import setup_logger                                                            # Setup the logger that will perform logging of events
 from custom_Trainer_class import My_GoTo_Trainer                                                            # To instantiate the Trainer class
-from custom_image_batch_visualize_func import putModelWeights                                               # Assign the latest model checkpoint to the config model.weights 
 from custom_mask2former_setup_func import save_dictionary, printAndLog                                      # Save history_dict, log results
 from custom_mask2former_config import createVitrolifeConfiguration, changeConfig_withFLAGS                  # Create the config used for hyperparameter optimization 
-from custom_image_batch_visualize_func import visualize_the_images                                          # Functions visualize the image batch
-from custom_display_learning_curves_func import show_history, combineDataToHistoryDictionaryFunc          # Function used to plot the learning curves for the given training and to add results to the history dictionary
+from custom_image_batch_visualize_func import visualize_the_images, putModelWeights                         # Functions visualize the image batch and assigning the latest model checkpoint to the config model.weights 
+from custom_display_learning_curves_func import show_history, combineDataToHistoryDictionaryFunc            # Function used to plot the learning curves for the given training and to add results to the history dictionary
 from custom_evaluation_func import evaluateResults                                                          # Function to evaluate the metrics for the segmentation
 from custom_callback_functions import early_stopping, lr_scheduler, keepAllButLatestAndBestModel, updateLogsFunc    # Callback functions for model training
 
@@ -142,7 +141,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     
     # Train the model 
     for epoch in range(epochs_to_run):                                                                      # Iterate over the chosen amount of epochs
-        # try:
+        try:
             epoch_start_time = time()                                                                       # Now this new epoch starts
             if FLAGS.inference_only==False:
                 config = launch_custom_training(FLAGS=FLAGS, config=config, dataset=train_dataset, epoch=epoch, run_mode="train", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
@@ -175,9 +174,9 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             if quit_training == True:                                                                       # If the early stopping callback says we need to quit the training ...
                 printAndLog(input_to_write="Committing early stopping at epoch {:d}. The best {:s} is {:.3f} from epoch {:d}".format(epoch+1, FLAGS.eval_metric, new_best, best_epoch), logs=logs)
                 break                                                                                       # break the for loop and stop running more epochs
-        # except Exception as ex:
-        #     error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, epochs_to_run, ex.args)
-        #     printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
+        except Exception as ex:
+            error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, epochs_to_run, ex.args)
+            printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
 
     # Evaluation on the vitrolife test dataset. There is no ADE20K-test dataset.
     test_history = {}                                                                                       # Initialize the test_history dictionary as an empty dictionary

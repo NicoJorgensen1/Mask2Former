@@ -1,7 +1,5 @@
 import os                                                                                           # Used to navigate around the current os and folder structure
 import torch                                                                                        # torch is implemented to check if a GPU is available
-import numpy as np                                                                                  # Used to compute the step ranges
-from copy import deepcopy 
 from sys import path as sys_PATH                                                                    # Import the PATH variable
 from detectron2.data import MetadataCatalog                                                         # Catalog containing metadata for all datasets available in Detectron2
 from detectron2.config import get_cfg                                                               # Function to get the default configuration from Detectron2
