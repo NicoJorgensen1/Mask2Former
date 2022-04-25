@@ -29,7 +29,7 @@ def createVitrolifeConfiguration(FLAGS):
     add_deeplab_config(cfg)
     add_maskformer2_config(cfg)
     if FLAGS.use_transformer_backbone==True:                                                        # If the user chose the transformer backbone ...
-        swin_type = "tiny" #if "nico" in Mask2Former_dir.lower() else "base"                         # If on home computer, use swin tiny. If on gpucluster, use swin base
+        swin_type = "tiny" #if "nico" in Mask2Former_dir.lower() else "large"                         # If on home computer, use swin tiny. If on gpucluster, use swin large
         swin_config = [x for x in os.listdir(os.path.join(config_folder, "swin")) if all([swin_type in x, x.endswith(".yaml")])][-1]    # Find the corresponding swin config
         cfg.merge_from_file(os.path.join(config_folder, "swin", swin_config))                       # Merge the configuration with the swin configuration
     else:                                                                                           # If we are not using the swin backbone ...
@@ -39,7 +39,6 @@ def createVitrolifeConfiguration(FLAGS):
     if "vitrolife" in FLAGS.dataset_name.lower():                                                   # If we are working on the Vitrolife dataset ... 
         cfg["DATASETS"]["TRAIN"] = ("vitrolife_dataset_train",)                                     # ... define the training dataset by using the config as a dictionary
         cfg.DATASETS.TEST = ("vitrolife_dataset_val",)                                              # ... define the validation dataset by using the config as a CfgNode 
-        cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(MetadataCatalog.get("vitrolife_dataset_test").thing_classes)  # ... and assign the length of the remaining list as the number of classes
 
     cfg.MODEL.MASK_FORMER.TEST.SEMANTIC_ON = False                                                  # The Sem_Seg head will be off
     cfg.MODEL.MASK_FORMER.TEST.INSTANCE_ON = True                                                   # The Instance Seg head will be on
@@ -67,7 +66,8 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     if "vitrolife" in FLAGS.dataset_name.lower(): 
         cfg.MODEL.PIXEL_MEAN = [100.15, 102.03, 103.89]                                             # Write the correct image mean value for the entire vitrolife dataset
         cfg.MODEL.PIXEL_STD = [57.32, 59.69, 61.93]                                                 # Write the correct image standard deviation value for the entire vitrolife dataset
-        cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES = cfg.MODEL.ROI_HEADS.NUM_CLASSES                        # Set the number of classes for the sem_seg_head (that is unused)
+        cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(MetadataCatalog.get("vitrolife_dataset_test").thing_classes)  # Assign the length of the thing_classes list as the number of classes
+        cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES = cfg.MODEL.ROI_HEADS.NUM_CLASSES                        # Set the number of classes for the sem_seg_head (that is unused when only doing instance segmentation)
 
     # Solver values
     cfg.SOLVER.IMS_PER_BATCH = int(FLAGS.batch_size)                                                # Batch size used when training => batch_size pr GPU = batch_size // num_gpus
