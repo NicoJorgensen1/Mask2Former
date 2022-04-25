@@ -2,6 +2,7 @@
 import os
 import numpy as np
 from time import time                                                                           # Used to time the epoch training duration
+from copy import deepcopy                                                                       # Used to make a new copy of the config 
 from natsort import natsorted                                                                   # Used to sort the list of model_files saved 
 from custom_image_batch_visualize_func import extractNumbersFromString                          # Function to extract numbers from a string
 from custom_print_and_log_func import printAndLog                                               # Used to update the log file
@@ -37,7 +38,9 @@ def lr_scheduler(cfg, history, FLAGS, lr_updated):
 
 
 # Define a function to delete all models but the 
-def keepAllButLatestAndBestModel(cfg, history, FLAGS, bestOrLatest="latest", delete_leftovers=True, logs=None):
+def keepAllButLatestAndBestModel(config, history, FLAGS, bestOrLatest="latest", delete_leftovers=True, logs=None):
+    cfg = deepcopy(config) 
+    del cfg
     model_files = natsorted([x for x in os.listdir(cfg.OUTPUT_DIR) if "model_epoch" in x.lower()])  # Get a list of available models
     if len(model_files) >= 1:                                                                   # If any model files have been saved yet ...
         mode = "min" if "loss" in FLAGS.eval_metric.lower() else "max"                          # Whether a lower value or a higher value is better

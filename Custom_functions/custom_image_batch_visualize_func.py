@@ -103,8 +103,7 @@ def draw_mask_image(mask_list, lbl_list, meta_data):
 
 
 # Define a function to predict some label-masks for the dataset
-def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False, device="cuda"):
-    device = "cpu"
+def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False, device="cpu"):
     if model_done_training==False: config = putModelWeights(config)                         # Change the config and append the latest model as the used checkpoint, if the model is still training
     if data_batch == None:                                                                  # If no batch with data was send to the function ...
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # ... and if we are using the vitrolife dataset
@@ -148,6 +147,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
                     "masks": data["instances"].get_fields()["gt_masks"]}]                   # ... dicts with keys "labels" and "masks" for each image
         matched_output = matcher.forward(outputs=outputs, targets=targets)[0]               # Performs the Hungarian matching and outputs a list of [[idx_mask], [idx_lbl]] ...
         y_pred_masks, y_pred_lbls = list(), list()                                          # Initiate lists to store the predicted masks and predicted labels 
+        assert pred_masks.shape[0] == FLAGS.num_queries == outputs["pred_masks"].shape[1], "This fucking has to work"
         for mask_pred_idx, lbl_pred_idx in zip(matched_output[0], matched_output[1]):       # ... where the indices refer to the indices of predicted mask from the outputs dictionary and the predicted class
             y_pred_masks.append(pred_masks[mask_pred_idx].cpu().numpy().astype(np.uint8))   # Append the predicted mask to the list of predicted masks
             y_pred_lbls.append(pred_classes[lbl_pred_idx].cpu().numpy().item())             # Append the predicted class label to the list of predicted labels 
@@ -171,7 +171,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
 # data_split = "train"
 
 # Define function to plot the images
-def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False, device="cuda"):
+def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False, device="cpu"):
     # Get the datasplit and number of images to show
     fig_list, data_batches_final = list(), list()                                           # Initiate the list to store the figures in
     if data_batches==None:                                                                  # If no previous data has been sent ...

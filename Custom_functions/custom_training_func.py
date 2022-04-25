@@ -26,7 +26,7 @@ def run_train_func(cfg):
 # Function to launch the training
 def launch_custom_training(FLAGS, config, dataset, epoch=0, run_mode="train", hyperparameter_opt=False):
     FLAGS.epoch_iter = int(np.floor(np.divide(FLAGS.num_train_files, FLAGS.batch_size)))                    # Compute the number of iterations per training epoch with the given batch size
-    config.SOLVER.MAX_ITER = FLAGS.epoch_iter * (7 if all(["train" in run_mode, hyperparameter_opt==False, "vitrolife" in FLAGS.dataset_name.lower()]) else 1)  # Increase training iteration count for precise BN computations
+    config.SOLVER.MAX_ITER = FLAGS.epoch_iter * (2 if all(["train" in run_mode, hyperparameter_opt==False, "vitrolife" in FLAGS.dataset_name.lower()]) else 1)  # Increase training iteration count for precise BN computations
     if all(["train" in run_mode, hyperparameter_opt==True]):
         if "vitrolife" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 2)    # ... Transformer and ResNet backbones need a ...
         elif "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 1/10)  # ... few thousand samples to accomplish anything
@@ -60,34 +60,22 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
         if FLAGS.use_transformer_backbone==True: batch_size_max = np.max([1, int(np.floor(np.min(FLAGS.available_mem_info)/15000))])
         else: batch_size_max = int(np.ceil(np.min(FLAGS.available_mem_info)/1500))
         
-        lr = trial.suggest_float(name="learning_rate", low=1e-8, high=5e-4)
-        batch_size = trial.suggest_int(name="batch_size", low=1, high=int(batch_size_max))
-        optimizer_used = trial.suggest_categorical(name="optimizer_used", choices=["ADAMW", "SGD"])
-        weight_decay = trial.suggest_float(name="weight_decay", low=1e-8, high=2e-2)
-        dice_loss_weight = trial.suggest_float(name="dice_loss_weight", low=1, high=25)
-        mask_loss_weight = trial.suggest_float(name="mask_loss_weight", low=1, high=25)
-        class_loss_weight = trial.suggest_float(name="class_loss_weight", low=1, high=25)
-        no_object_weight = trial.suggest_float(name="no_object_weight", low=0.001, high=2)
-        backbone_multiplier = trial.suggest_float("backbone_multiplier", low=1e-8, high=0.25)
-
         # Change the FLAGS parameters and then change the config
-        FLAGS.learning_rate = lr
-        FLAGS.batch_size = batch_size
-        FLAGS.optimizer_used = optimizer_used
-        FLAGS.weight_decay = weight_decay
-        FLAGS.backbone_multiplier = backbone_multiplier 
-        FLAGS.dice_loss_weight = dice_loss_weight
-        FLAGS.mask_loss_weight = mask_loss_weight
-        FLAGS.class_loss_weight = class_loss_weight 
-        FLAGS.no_object_weight = no_object_weight
+        FLAGS.learning_rate = trial.suggest_float(name="learning_rate", low=1e-8, high=1e-4)
+        FLAGS.batch_size = trial.suggest_int(name="batch_size", low=1, high=int(batch_size_max))
+        FLAGS.optimizer_used = trial.suggest_categorical(name="optimizer_used", choices=["ADAMW", "SGD"])
+        FLAGS.weight_decay = trial.suggest_float(name="weight_decay", low=1e-8, high=2e-2)
+        FLAGS.backbone_multiplier = trial.suggest_float("backbone_multiplier", low=1e-8, high=0.25) 
+        FLAGS.dice_loss_weight = trial.suggest_float(name="dice_loss_weight", low=1, high=25)
+        FLAGS.mask_loss_weight = trial.suggest_float(name="mask_loss_weight", low=1, high=25)
+        FLAGS.class_loss_weight = trial.suggest_float(name="class_loss_weight", low=1, high=25) 
+        FLAGS.no_object_weight = trial.suggest_float(name="no_object_weight", low=0.001, high=2)
         if "vitrolife" in FLAGS.dataset_name:
-            num_queries = trial.suggest_int(name="num_queries", low=15, high=150) 
-            FLAGS.num_queries = num_queries
+            FLAGS.num_queries = trial.suggest_int(name="num_queries", low=15, high=150) 
         if FLAGS.use_transformer_backbone==False:
-            resnet_depth = trial.suggest_categorical(name="resnet_depth", choices=[50, 101])
-            backbone_freeze_layers = trial.suggest_int(name="backbone_freeze", low=0, high=5)
-            FLAGS.resnet_depth = resnet_depth
-            FLAGS.backbone_freeze_layers = backbone_freeze_layers
+            FLAGS.resnet_depth = trial.suggest_categorical(name="resnet_depth", choices=[50, 101])
+            FLAGS.backbone_freeze_layers = trial.suggest_int(name="backbone_freeze", low=0, high=5)
+        del config 
         config = createVitrolifeConfiguration(FLAGS=FLAGS)
         config = changeConfig_withFLAGS(cfg=config, FLAGS=FLAGS)
     elif all([hpt_opt==False, trial is not None, FLAGS.hp_optim==True]):
@@ -106,6 +94,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
         if FLAGS.use_transformer_backbone==False:
             FLAGS.resnet_depth = trial.params["resnet_depth"]
             FLAGS.backbone_freeze_layers = trial.params["backbone_freeze"]
+        del config 
         config = createVitrolifeConfiguration(FLAGS=FLAGS)
         config = changeConfig_withFLAGS(cfg=config, FLAGS=FLAGS)
     else: config = deepcopy(config)
@@ -162,7 +151,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             
             # Performing callbacks
             if FLAGS.inference_only==False and hyperparameter_optimization==False: 
-                config = keepAllButLatestAndBestModel(cfg=config, history=history, FLAGS=FLAGS)             # Keep only the best and the latest model weights. The rest are deleted.
+                config = keepAllButLatestAndBestModel(config=config, history=history, FLAGS=FLAGS)          # Keep only the best and the latest model weights. The rest are deleted.
                 if epoch+1 >= FLAGS.patience:                                                               # If the model has trained for more than 'patience' epochs and we aren't debugging ...
                     config, lr_update_check = lr_scheduler(cfg=config, history=history, FLAGS=FLAGS, lr_updated=lr_update_check)  # ... change the learning rate, if needed
                     FLAGS.learning_rate = config.SOLVER.BASE_LR                                             # Update the FLAGS.learning_rate value

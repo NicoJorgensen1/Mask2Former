@@ -65,10 +65,6 @@ def object_func(trial):
     if FLAGS.HPO_current_trial < FLAGS.num_trials-1:
         printAndLog(input_to_write=string2, logs=log_file, prefix="")
     FLAGS.HPO_current_trial += 1
-    # Assure we have numeric stability
-    study_direction = "minimize" if "loss" in FLAGS.eval_metric else "maximize"
-    if "minimize" in study_direction:
-        if np.isnan(new_best): new_best = float(1e3)
     return new_best
 
 

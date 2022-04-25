@@ -30,6 +30,8 @@ from custom_analyze_model_func import analyze_model_func                        
 from custom_training_func import objective_train_func                                                   # Function to launch the training with the given dataset
 from custom_image_batch_visualize_func import visualize_the_images                                      # Functions visualize the image batch
 from custom_HPO_func import perform_HPO                                                                 # Function to perform HPO and read the input variables
+from custom_training_func import get_HPO_params                                                         # Function to change the config and FLAGS parameters 
+
 
 #####
 ##### Precision and Recall metrics are missing for the evaluation 
@@ -38,6 +40,7 @@ from custom_HPO_func import perform_HPO                                         
 
 # Get the FLAGS, the config and the logfile. 
 FLAGS, cfg, trial, log_file = perform_HPO()                                                             # Perform HPO if that is chosen 
+cfg, FLAGS = get_HPO_params(config=cfg, FLAGS=FLAGS, trial=trial, hpt_opt=False)                        # Update the config and the FLAGS with the best found parameters 
 printAndLog(input_to_write="FLAGS input arguments:", logs=log_file)                                     # Print the new, updated FLAGS ...
 printAndLog(input_to_write={key: vars(FLAGS)[key] for key in sorted(vars(FLAGS).keys())},               # ...  input arguments to the logfile ...
             logs=log_file, oneline=False, length=27)                                                    # ... sorted by the key names 
@@ -48,18 +51,16 @@ printAndLog(input_to_write="Model analysis:".upper(), logs=log_file)            
 printAndLog(input_to_write=model_analysis, logs=log_file, oneline=False, length=27)                     # ... and write it to the logfile
 
 # Visualize some random images before training 
-try: fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS, device=cfg.MODEL.DEVICE) # Visualize some segmentations ...
-except: fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS, device="cpu") # ... on random images before training
+fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS)               # Visual some segmentation on random images before training
 
 # Train the model with the best found hyperparameters
 history, test_history, new_best, best_epoch, cfg = objective_train_func(trial=trial, FLAGS=FLAGS,       # Start the training with ...
             cfg=cfg, logs=log_file, data_batches=data_batches, hyperparameter_optimization=False)       # ... the optimal hyper parameters
+printAndLog(input_to_write="Now training is completed", logs=log_file)
 
 # Visualize the same images, now after training
-cfg = keepAllButLatestAndBestModel(cfg=cfg, history=history, FLAGS=FLAGS, bestOrLatest="best")          # Put the model weights for the best performing model on the config
+cfg = keepAllButLatestAndBestModel(config=cfg, history=history, FLAGS=FLAGS, bestOrLatest="best")       # Put the model weights for the best performing model on the config
 write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
-try: visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True, device=cfg.MODEL.DEVICE)     # Visualize the images again, trying to use GPU 
-except: visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True, device="cpu") # Visualize the images again, this time using slower cpu 
 
 # Print and log the best metric results
 printAndLog(input_to_write="Final results:".upper(), logs=log_file)
@@ -76,7 +77,4 @@ if "vitrolife" in FLAGS.dataset_name.lower():                                   
 os.remove(os.path.join(cfg.OUTPUT_DIR, "log.txt"))
 zip_output(cfg)
 
-
-
-
-
+visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True)       # Visualize the images again after training 
