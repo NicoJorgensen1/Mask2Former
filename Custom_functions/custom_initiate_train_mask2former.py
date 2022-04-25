@@ -31,8 +31,9 @@ from custom_training_func import objective_train_func                           
 from custom_image_batch_visualize_func import visualize_the_images                                      # Functions visualize the image batch
 from custom_HPO_func import perform_HPO                                                                 # Function to perform HPO and read the input variables
 
-
-##### Try-except from both HPO function and custom_train_func needs to be in-commented again 
+#####
+##### Precision and Recall metrics are missing for the evaluation 
+##### 
 
 
 # Get the FLAGS, the config and the logfile. 

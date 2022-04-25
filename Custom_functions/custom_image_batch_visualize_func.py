@@ -104,6 +104,7 @@ def draw_mask_image(mask_list, lbl_list, meta_data):
 
 # Define a function to predict some label-masks for the dataset
 def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False, device="cuda"):
+    device = "cpu"
     if model_done_training==False: config = putModelWeights(config)                         # Change the config and append the latest model as the used checkpoint, if the model is still training
     if data_batch == None:                                                                  # If no batch with data was send to the function ...
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # ... and if we are using the vitrolife dataset
