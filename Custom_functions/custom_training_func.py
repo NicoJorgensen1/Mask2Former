@@ -119,7 +119,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     new_best = np.inf if train_mode=="min" else -np.inf                                                     # Initiate the original "best_value" as either infinity or -infinity according to train_mode
     best_epoch = 0                                                                                          # Initiate the best epoch as being epoch_0, i.e. before doing any model training
     train_dataset = cfg.DATASETS.TRAIN                                                                      # Get the training dataset name
-    val_dataset = cfg.DATASETS.TEST                                                                         # Get the validation dataset name
+    val_dataset = train_dataset # cfg.DATASETS.TEST                                                                         # Get the validation dataset name
     lr_update_check = np.zeros((FLAGS.patience, 1), dtype=bool)                                             # Preallocating validation array to determine whether or not the learning rate was updated
     quit_training = False                                                                                   # Boolean value determining whether or not to commit early stopping
     epochs_to_run = 1 if hyperparameter_optimization else FLAGS.num_epochs                                  # We'll run only 1 epoch if we are performing HPO
