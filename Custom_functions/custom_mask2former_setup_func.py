@@ -76,7 +76,6 @@ def changeFLAGS(FLAGS):
     if FLAGS.min_delta < 1.0: FLAGS.min_delta *= 100                                    # As the model outputs metrics multiplied by a factor of 100, the min_delta value must also be scaled accordingly
     if FLAGS.debugging: FLAGS.eval_metric.replace("val", "train")                       # The metric used for evaluation will be a training metric, if we are debugging the model
     if FLAGS.inference_only: FLAGS.num_epochs = 1                                       # If we are only using inference, then we'll only run through one epoch
-    FLAGS.num_queries = 100 if FLAGS.dataset_name=="ade20k" else 25                     # The number of queries will be set to 100 with the ADE20K dataset and 25 with the Vitrolife dataset
     FLAGS.HPO_current_trial = 0                                                         # A counter for the number of trials of hyperparameter optimization performed 
     FLAGS.epoch_num = 0                                                                 # A counter iterating over the number of epochs 
     FLAGS.HPO_best_metric = np.inf if "loss" in FLAGS.eval_metric.lower() else -np.inf  # Create variable to keep track of the best results obtained when performing HPO
@@ -95,6 +94,7 @@ parser.add_argument("--optimizer_used", type=str, default="ADAMW", help="Optimiz
 parser.add_argument("--num_workers", type=int, default=6, help="Number of workers to use for training the model. Default: 4")
 parser.add_argument("--max_iter", type=int, default=int(1e5), help="Maximum number of iterations to train the model for. <<Deprecated argument. Use 'num_epochs' instead>>. Default: 100000")
 parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of the feature extracting ResNet backbone. Possible values: [18,34,50,101] Default: 101")
+parser.add_argument("--num_queries", type=int, default=100, help="The number of queries used for training. Default: 100")
 parser.add_argument("--batch_size", type=int, default=1, help="The batch size used for training the model. Default: 1")
 parser.add_argument("--num_images", type=int, default=6, help="The number of images to display/segment. Default: 6")
 parser.add_argument("--num_trials", type=int, default=3, help="The number of trials to run HPO for. Only relevant if '--hp_optim==True'. Default: 300")
