@@ -118,7 +118,7 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
         img_mask_pair_list.append(current_pair)                                                     # Append the dictionary for the current pair to the list of images for the given dataset
         count += 1                                                                                  # Increase the sample counter 
         if "nico" in vitrolife_dataset_filepath.lower():                                            # If we are working on my local computer ...
-            if count > 15:                                                                          # ... and 20 images have already been loaded ...
+            if count > 50:                                                                          # ... and 50 images have already been loaded ...
                 break                                                                               # ... then that is enough, thus quit reading the rest of the images 
     assert len(img_mask_pair_list) >= 1, print("No image/mask pairs found in {:s} subfolders 'raw_image' and 'masks'".format(vitrolife_dataset_filepath))
     img_mask_pair_list = natsorted(img_mask_pair_list)                                              # Sorting the list assures the same every time this function runs
@@ -129,7 +129,7 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
 # Function to register the dataset and the meta dataset for each of the three splitshuffleshuffles, [train, val, test]
 def register_vitrolife_data_and_metadata_func(debugging=False):
     thing_colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0),                                   # Set random colors for the Well, Zona, PV Space and Cell classes
-        (185,220,255), (255,185,220), (220,255,185), (185,255,0), (0,185,220), (220,0,185), (115,45,115)]   # Set similar colors for the PN classes
+        (185,220,255), (255,185,220), (220,255,185), (185,255,0), (0,185,220), (220,0,185), (115,45,115), (45,115,45)]  # Set similar colors for the PN classes
     thing_id = {kk: key for kk,key in enumerate(list(class_labels.keys()))}                         # Get a dictionary of continuous keys
     for split_mode in ["train", "val", "test"]:                                                     # Iterate over the three dataset splits ... 
         DatasetCatalog.register("vitrolife_dataset_{:s}".format(split_mode), lambda split_mode=split_mode: vitrolife_dataset_function(run_mode=split_mode, debugging=debugging))    # Register the dataset

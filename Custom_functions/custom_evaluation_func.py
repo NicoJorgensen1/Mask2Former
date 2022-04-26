@@ -7,12 +7,10 @@ from detectron2.evaluation import inference_on_dataset
 from detectron2.modeling import build_model
 from detectron2.data import build_detection_test_loader
 
-
 # data_split="train"
 # dataloader=None
 # evaluator=None
 # hp_optim=False
-
 
 # Build evaluator to compute the evaluation metrics 
 def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluator=None, hp_optim=False):
@@ -30,7 +28,7 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluator=N
         evaluator = InstanceSegEvaluator(dataset_name=dataset_name, output_dir=pred_out_dir, allow_cached_coco=False)
     model = build_model(cfg=cfg)
 
-    # Compute the metrics. NaN values typically happen when an object is not present on the images 
+    # Compute the metrics. NaN values typically happen when an object is not present on any of the evaluated images
     eval_results = inference_on_dataset(model=model, data_loader=dataloader, evaluator=evaluator)
     for key in eval_results.keys():
         for sub_key in eval_results[key].keys():
