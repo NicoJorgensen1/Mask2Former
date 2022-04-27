@@ -26,7 +26,7 @@ def run_train_func(cfg):
 # Function to launch the training
 def launch_custom_training(FLAGS, config, dataset, epoch=0, run_mode="train", hyperparameter_opt=False):
     FLAGS.epoch_iter = int(np.floor(np.divide(FLAGS.num_train_files, FLAGS.batch_size)))                    # Compute the number of iterations per training epoch with the given batch size
-    config.SOLVER.MAX_ITER = FLAGS.epoch_iter * (2 if all(["train" in run_mode, hyperparameter_opt==False, "vitrolife" in FLAGS.dataset_name.lower()]) else 1)  # Increase training iteration count for precise BN computations
+    config.SOLVER.MAX_ITER = FLAGS.epoch_iter * (5 if all(["train" in run_mode, hyperparameter_opt==False, "vitrolife" in FLAGS.dataset_name.lower()]) else 1)  # Increase training iteration count for precise BN computations
     if all(["train" in run_mode, hyperparameter_opt==True]):
         if "vitrolife" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 2)    # ... Transformer and ResNet backbones need a ...
         elif "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 1/10)  # ... few thousand samples to accomplish anything
@@ -69,7 +69,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
         FLAGS.dice_loss_weight = trial.suggest_float(name="dice_loss_weight", low=1, high=25)
         FLAGS.mask_loss_weight = trial.suggest_float(name="mask_loss_weight", low=1, high=25)
         FLAGS.class_loss_weight = trial.suggest_float(name="class_loss_weight", low=1, high=25) 
-        FLAGS.no_object_weight = trial.suggest_float(name="no_object_weight", low=0.001, high=2)
+        FLAGS.no_object_weight = trial.suggest_float(name="no_object_weight", low=1e-4, high=2)
         if "vitrolife" in FLAGS.dataset_name:
             FLAGS.num_queries = trial.suggest_int(name="num_queries", low=15, high=150) 
         if FLAGS.use_transformer_backbone==False:
@@ -130,7 +130,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     
     # Train the model 
     for epoch in range(epochs_to_run):                                                                      # Iterate over the chosen amount of epochs
-        try:
+        # try:
             epoch_start_time = time()                                                                       # Now this new epoch starts
             if FLAGS.inference_only==False:
                 config = launch_custom_training(FLAGS=FLAGS, config=config, dataset=train_dataset, epoch=epoch, run_mode="train", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
@@ -146,8 +146,8 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                         metrics_eval=eval_val_results["segm"], history=history)                             # ... including all training and validation metrics
             save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
             [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
-            if np.mod(np.add(epoch,1), FLAGS.display_rate) == 0 and hyperparameter_optimization==False:     # Every 'display_rate' epochs, the model will segment the same images again ...
-                _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... segment and save visualizations
+            if all([np.mod(np.add(epoch,1), FLAGS.display_rate) == 0, hyperparameter_optimization==False, "nico" not in os.getenv("DETECTRON2_DATASETS").lower()]): # Every 'display_rate' epochs ...
+                _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
             
             # Performing callbacks
             if FLAGS.inference_only==False and hyperparameter_optimization==False: 
@@ -163,9 +163,9 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             if quit_training == True:                                                                       # If the early stopping callback says we need to quit the training ...
                 printAndLog(input_to_write="Committing early stopping at epoch {:d}. The best {:s} is {:.3f} from epoch {:d}".format(epoch+1, FLAGS.eval_metric, new_best, best_epoch), logs=logs)
                 break                                                                                       # break the for loop and stop running more epochs
-        except Exception as ex:
-            error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, epochs_to_run, ex.args)
-            printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
+        # except Exception as ex:
+        #     error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, epochs_to_run, ex.args)
+        #     printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
 
     # Evaluation on the vitrolife test dataset. There is no ADE20K-test dataset.
     test_history = {}                                                                                       # Initialize the test_history dictionary as an empty dictionary

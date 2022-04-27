@@ -1,6 +1,7 @@
 # Import libraries
 import os                                                                                               # Used to navigate different paths on the system
 import json                                                                                             # Used to read the metrics_files from the output_dir
+import pickle                                                                                           # Used for serializing and deserializing pkl objects 
 import numpy as np                                                                                      # Used for division and floor/ceil operations here
 import matplotlib.pyplot as plt                                                                         # The plotting package
 from natsort import natsorted                                                                           # Function to natural sort a list or array 
@@ -9,7 +10,7 @@ from custom_image_batch_visualize_func import extractNumbersFromString          
 from detectron2.data import MetadataCatalog                                                             # Catalogs for metadata for registered datasets
 
 # config = cfg
-# config.OUTPUT_DIR = "/mnt/c/Users/Nico-/Documents/Python_Projects/MaskFormer/output_vitrolife_13_25_14MAR2022"
+# config.OUTPUT_DIR = "/mnt/c/Users/Nico-/Documents/Python_Projects/Mask2Former/output_vitrolife_01_24_27APR2022"
 
 
 # Define a function to compute the moving average of an input array or list
@@ -55,7 +56,7 @@ def changeClassNameForClassIdxFunc(key, config):
     for class_name, class_lbl in zip(class_names, class_indices):                                       # Iterate over all the class names and the corresponding class labels
         if class_name.lower() in key.lower():                                                           # If the class name is in the key name ...
             key = key.lower().replace(class_name.lower(), "C{:d}".format(class_lbl))                    # ... the class_name part is replaced with the corresponding class label
-            key = key.replace("ap", "AP").replace("-", "_")                                             # ... and we make sure the key is written in proper format
+            key = key.replace("ap", "AP").replace("-", "_").replace("iou", "IoU")                       # ... and we make sure the key is written in proper format
             break                                                                                       # ... and we stop iterating over the rest of the class_names
     return key                                                                                          # Return the new key name
 
@@ -78,8 +79,17 @@ def extractRelevantHistoryKeys(history):
     AP_PV_space  = [key for key in history.keys() if "AP" in key and key.endswith("C3")]
     AP_Cell = [key for key in history.keys() if "AP" in key and key.endswith("C4")]
     AP_PN = [key for key in history.keys() if "AP" in key and key.endswith("C5")]
-    hist_keys_list = [loss_total, AP_total, AP_50, loss_ce, loss_dice, loss_mask, learn_rate,
-            AP_75, AP_Small, AP_Medium, AP_Large, AP_Well, AP_Zona, AP_PV_space, AP_Cell, AP_PN]
+    Precision_IoU50 = [key for key in history.keys() if "precision" in key and key.endswith("50")]
+    Precision_IoU50_Well = [key for key in history.keys() if "precision" in key and key.endswith("C1")]
+    Precision_IoU50_Zona = [key for key in history.keys() if "precision" in key and key.endswith("C2")]
+    Precision_IoU50_PV_space = [key for key in history.keys() if "precision" in key and key.endswith("C3")]
+    Precision_IoU50_Cell = [key for key in history.keys() if "precision" in key and key.endswith("C4")]
+    Precision_IoU50_PN = [key for key in history.keys() if "precision" in key and key.endswith("C5")]
+    
+    hist_keys_list = [loss_total, AP_total, AP_50, Precision_IoU50, loss_ce, loss_dice, loss_mask, 
+            learn_rate, AP_75, AP_Small, AP_Medium, AP_Large, AP_Well, AP_Zona, AP_PV_space, AP_Cell,
+            AP_PN, Precision_IoU50_Well, Precision_IoU50_Zona, Precision_IoU50_PV_space,
+            Precision_IoU50_Cell, Precision_IoU50_PN]
     return hist_keys_list
 
 
@@ -94,8 +104,15 @@ def combineDataToHistoryDictionaryFunc(config, eval_metrics=None, data_split="tr
         for key in eval_metrics.keys():                                                                 # Iterate over all keys in the history
             old_key = deepcopy(key)                                                                     # Make a copy now of the original key name from the metrics_train/eval dictionary
             key = changeClassNameForClassIdxFunc(key=key, config=config)                                # Exchange class_name with class_label in the key-name
-            if data_split+"_"+key not in history: history[data_split+"_"+key] = list()                  # If the given key doesn't exist add the key with ...
-            history[data_split+"_"+key].append(eval_metrics[old_key])                                   # Append the current key-value from the metrics_train
+            if data_split+"_"+key not in history:                                                       # If the given key doesn't exist ...
+                history[data_split+"_"+key] = list()                                                    # ... add the key as an empty list and ... 
+            if all(["precision" in key.lower(), "_iou" in key.lower()]):                                # If we are reading the precision-recall values for the current epoch ...
+                history[data_split+"_"+key] = eval_metrics[old_key]                                     # ... simply replace the values from the earlier epoch 
+            elif all([key in ["precision", "recall", "scores"], "test" not in data_split]):             # If the key is one of the precision, recall or score keys for training or validation ...
+                history[data_split+"_"+key].append({"Epoch_{}".format(np.max(history["val_epoch_num"])): eval_metrics[old_key]})    # ... append a dict with key "epoch_num" and the key-value 
+            elif all([key in ["precision", "recall", "scores"], "test" in data_split]):                 # If the key is one of the precision, recall or score keys for test values ...
+                history[data_split+"_"+key] = eval_metrics[old_key]                                     # ... simply add the precision values without putting it in a dictionary first ... 
+            else: history[data_split+"_"+key].append(eval_metrics[old_key])                             # Append the current key-value from the metrics_train to the corresponding list 
     return history
 
 
@@ -106,14 +123,15 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
         history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_train, data_split="train", history=history)
     history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_eval, data_split="val", history=history)
     hist_keys = extractRelevantHistoryKeys(history)
-    ax_titles = ["Total_loss", "AP@.5:.05:.95", "AP50", "Loss_CE", "Loss_DICE", "Loss_mask", "Learning_rate",   # Create titles for the axes, ...
-        "AP75", "AP_small", "AP_medium", "AP_large", "AP_Well", "AP_Zona", "AP_PV_space", "AP_Cell", "AP_PN"]   # ... legends and y labels
+    ax_titles = ["Total_loss", "AP@.5:.05:.95", "AP50", "Precision_IoU@50", "Loss_CE", "Loss_DICE",     # Create titles for the axes, legends and y labels
+        "Loss_mask", "Learning_rate", "AP75", "AP_small", "AP_medium", "AP_large", "AP_Well", 
+        "AP_Zona", "AP_PV_space", "AP_Cell", "AP_PN", "Precision_IoU@50_Well", "Precision_IoU@50_Zona", 
+         "Precision_IoU@50_PV_space", "Precision_IoU@50_Cell", "Precision_IoU@50_PN"]
     colors = ["blue", "red", "black", "green", "magenta", "cyan", "yellow", "deeppink", "purple",       # Create colors for ... 
                 "peru", "darkgrey", "gold", "springgreen", "orange", "crimson", "lawngreen"]            # ... the line plots
-
-    n_rows, n_cols, ax_count = 4, (3,4,4,5), 0                                                          # Initiate values for the number of rows and columns
+    n_rows, n_cols, ax_count = 5, (4,4,4,5,5), 0                                                        # Initiate values for the number of rows and columns
     if FLAGS.num_classes > 10:                                                                          # If there are more than 10 classes (i.e. for ADE20K_dataset) ...
-        n_rows, n_cols = 3, (3,4,4)                                                                     # ... the number of rows and columns gets reduced ...
+        n_rows, n_cols = 3, (4,4,4)                                                                     # ... the number of rows and columns gets reduced ...
         class_names = MetadataCatalog[config.DATASETS.TRAIN[0]].thing_classes                           # Get the class names for the dataset
         ax_tuple = [(ii,x) for (ii,x) in enumerate(ax_titles) if "PV_space" not in x and not any([y in x for y in class_names])]    # ... remove the class_specific ax_titles
         ax_titles = [x[1] for x in ax_tuple]                                                            # Get the new list of kept ax_titles
@@ -133,13 +151,19 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
             y_top_val = 0                                                                               # Initiate a value to determine the y_max value of the plot
             for kk, key in enumerate(sorted(hist_keys[ax_count], key=str.lower)):                       # Looping through all keys in the history dict that will be shown on the current subplot axes
                 if np.max(history[key]) > y_top_val:                                                    # If the maximum value in the array is larger than the current y_top_val ...
-                    y_top_val = np.ceil(np.max(history[key])/10)*10                                     # ... y_top_val is updated and rounded to the nearest 10
-                plt.plot(np.linspace(start=np.min(history["val_epoch_num"])-(0 if "AP" in key else 1),  # Plot the data, using a linspace ...
-                    stop=np.max(history["val_epoch_num"]), num=len(history[key])), history[key], color=colors[kk], linestyle="-", marker=".")   # ... argument for the x-axis and the data itself for the y-axis
+                    y_top_val = np.ceil(np.max(history[key])/2)*2                                       # ... y_top_val is updated and rounded to the nearest 2
+                start_val = np.min(history["val_epoch_num"])-(0 if any([x in key.lower() for x in ["ap", "precision"]]) else 1)   # The evaluation metrics must be plotted from after the first epoch, the losses from epoch=0
+                x_vals = np.linspace(start=start_val, stop=np.max(history["val_epoch_num"]), num=len(history[key])) # Create the x-axis values as a linearly spaced array from epoch start_val to the latest epoch 
+                if "precision" in key:                                                                  # If "precision" is in the key it means we are plotting a precision-recall curve with equally ...
+                    x_vals = np.round(np.linspace(start=np.max(history["val_epoch_num"])-1,stop=np.max(history["val_epoch_num"]),num=len(history[key])), 2) # ... spaced recall values of R=[0, 0.01, 1] 
+                    plt.xlim(left=np.min(x_vals), right=np.max(x_vals))
+                    plt.xlabel("Recall")
+                plt.plot(x_vals, np.asarray(history[key]).ravel(), color=colors[kk], linestyle="-", marker=".") # Plot the x and y values
             plt.legend(sorted([key for key in hist_keys[ax_count]], key=str.lower),                     # Create a legend for the subplot with ...
                     framealpha=0.35, loc="best" if len(hist_keys[ax_count])<4 else "upper left")        # ... the history keys displayed
             ax_count += 1                                                                               # Increase the subplot counter
-        if y_top_val <= 0.05 and "lr" not in key.lower(): plt.ylim(bottom=-0.05, top=0.05)              # If the max y-value is super low, the limits are changed
+        if y_top_val <= 0.05 and "lr" not in key.lower(): plt.ylim(bottom=-0.05, top=0.05)              # If the max y-value is super low, the limits are changed ...
+        elif y_top_val < 10: plt.ylim(bottom=0, top=y_top_val*1.075)                                    # If the max y-value is low, the limits are changed ...
         else: plt.ylim(bottom=0, top=y_top_val)                                                         # Set the final, updated y_top_value as the y-top-limit on the current subplot axes
         if "lr" in key.lower():                                                                         # If we are plotting the learning rate ...
             plt.ylim(bottom=np.min(history[key])*0.9, top=np.max(history[key])*1.075)                   # ... the y_limits are changed
@@ -151,11 +175,12 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
 
 
 # config=cfg
-# metrics_train=eval_train_results["sem_seg"]
-# metrics_eval=eval_val_results["sem_seg"]
-# pq_train=train_pq_results
-# pq_val=val_pq_results
+# metrics_train=eval_train_results["segm"]
+# metrics_eval=eval_val_results["segm"]
 # history = None
-# history = show_history(config=cfg, FLAGS=FLAGS, metrics_train=eval_train_results["sem_seg"], metrics_eval=eval_val_results["sem_seg"], pq_train=train_pq_results, pq_val=val_pq_results, history=None)
+# history = show_history(config=cfg, FLAGS=FLAGS, metrics_train=eval_train_results["segm"], metrics_eval=eval_val_results["segm"], history=None)
 
+# history_file = [os.path.join(config.OUTPUT_DIR,x) for x in os.listdir(config.OUTPUT_DIR) if "history" in x.lower()][0]
+# with open(history_file, "rb") as f:
+#     history = pickle.load(f)
 

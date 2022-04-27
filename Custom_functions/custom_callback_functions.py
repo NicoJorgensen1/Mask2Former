@@ -40,7 +40,7 @@ def lr_scheduler(cfg, history, FLAGS, lr_updated):
 # Define a function to delete all models but the 
 def keepAllButLatestAndBestModel(config, history, FLAGS, bestOrLatest="latest", delete_leftovers=True, logs=None):
     cfg = deepcopy(config) 
-    del cfg
+    del config
     model_files = natsorted([x for x in os.listdir(cfg.OUTPUT_DIR) if "model_epoch" in x.lower()])  # Get a list of available models
     if len(model_files) >= 1:                                                                   # If any model files have been saved yet ...
         mode = "min" if "loss" in FLAGS.eval_metric.lower() else "max"                          # Whether a lower value or a higher value is better

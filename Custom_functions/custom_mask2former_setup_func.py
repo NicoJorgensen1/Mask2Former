@@ -60,7 +60,10 @@ def write_config_to_file(config):
     config = deepcopy(config)                                                           # Make a hard copy of the config
     config.pop("custom_key")                                                            # Remove the "custom_key" key-set
     config_prefix = "vitrolife_" if "vitrolife" in config.DATASETS.TRAIN[0] else ""     # Prepend 'vitrolife' to the config filename, if we are using the Vitrolife dataset
-    with open(os.path.join(config.OUTPUT_DIR, "{}config_file.yaml".format(config_prefix)), "w") as f:   # Open a object instance with the config file
+    config_filename = os.path.join(config.OUTPUT_DIR, "{}config_file.yaml".format(config_prefix))   # Create the config filename
+    if os.path.isfile(config_filename):                                                 # If a file already exists with the config filename ...
+        os.remove(config_filename)                                                      # ... delete that file 
+    with open(config_filename, "w") as f:                                               # Open a object instance with the config file
         f.write(config.dump())                                                          # Dump the configuration to a file named config_name in cfg.OUTPUT_DIR
     f.close()                                                                           # Close the writer handle again 
 
@@ -101,7 +104,7 @@ parser.add_argument("--num_trials", type=int, default=3, help="The number of tri
 parser.add_argument("--num_random_trials", type=int, default=100, help="The number of random trials to run initiate the HPO for. Only relevant if '--hp_optim==True'. Default: 30")
 parser.add_argument("--display_rate", type=int, default=5, help="The epoch_rate of how often to display image segmentations. A display_rate of 3 means that every third epoch, visual segmentations are saved. Default: 5")
 parser.add_argument("--gpus_used", type=int, default=1, help="The number of GPU's to use for training. Only applicable for training with ADE20K. This input argument deprecates the '--num-gpus' argument. Default: 1")
-parser.add_argument("--num_epochs", type=int, default=3, help="The number of epochs to train the model for. Default: 1")
+parser.add_argument("--num_epochs", type=int, default=2, help="The number of epochs to train the model for. Default: 1")
 parser.add_argument("--warm_up_epochs", type=int, default=5, help="The number of epochs to warm up the learning rate when training. Will go from 1/100 '--learning_rate' to '--learning_rate' during these warm_up_epochs. Default: 3")
 parser.add_argument("--patience", type=int, default=5, help="The number of epochs to accept that the model hasn't improved before lowering the learning rate by a factor '--lr_gamma'. Default: 5")
 parser.add_argument("--early_stop_patience", type=int, default=13, help="The number of epochs to accept that the model hasn't improved before terminating training. Default: 12")
@@ -117,7 +120,7 @@ parser.add_argument("--weight_decay", type=float, default=1e-4, help="The weight
 parser.add_argument("--min_delta", type=float, default=5e-4, help="The minimum improvement the model must have made in order to be accepted as an actual improvement. Default 5e-4")
 parser.add_argument("--ignore_background", type=str2bool, default=False, help="Whether or not we are ignoring the background class. True = Ignore background, False = reward/penalize for background predictions. Default: False")
 parser.add_argument("--crop_enabled", type=str2bool, default=False, help="Whether or not cropping is allowed on the images. Default: False")
-parser.add_argument("--hp_optim", type=str2bool, default=True, help="Whether or not we are initiating the training with a hyperparameter optimization. Default: True")
+parser.add_argument("--hp_optim", type=str2bool, default=False, help="Whether or not we are initiating the training with a hyperparameter optimization. Default: True")
 parser.add_argument("--inference_only", type=str2bool, default=False, help="<< Currently not supported >> Whether or not training is skipped and only inference is run. This input argument deprecates the '--eval_only' argument. Default: False")
 parser.add_argument("--display_images", type=str2bool, default=False, help="Whether or not some random sample images are displayed before training starts. Default: False")
 parser.add_argument("--use_transformer_backbone", type=str2bool, default=True, help="Whether or not we are using the extended swin_small_transformer backbone. Default: True")

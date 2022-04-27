@@ -1,6 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 import contextlib
 import copy
+import os 
 import io
 import itertools
 import json
@@ -80,28 +81,16 @@ class InstanceSegEvaluator(COCOEvaluator):
             self._logger.info("Annotations are not available for evaluation.")
             return
 
-        self._logger.info(
-            "Evaluating predictions with {} COCO API...".format(
-                "unofficial" if self._use_fast_impl else "official"
-            )
-        )
+        self._logger.info("Evaluating predictions with {} COCO API...".format("unofficial" if self._use_fast_impl else "official"))
+
         for task in sorted(tasks):
             assert task in {"bbox", "segm", "keypoints"}, f"Got unknown task: {task}!"
-            coco_eval = (
-                _evaluate_predictions_on_coco(
-                    self._coco_api,
-                    coco_results,
-                    task,
-                    kpt_oks_sigmas=self._kpt_oks_sigmas,
-                    use_fast_impl=self._use_fast_impl,
-                    img_ids=img_ids,
-                    max_dets_per_image=self._max_dets_per_image,
-                )
-                if len(coco_results) > 0
-                else None  # cocoapi does not handle empty results very well
-            )
+            coco_eval = None
+            if len(coco_results) > 0:
+                coco_eval = _evaluate_predictions_on_coco(self._coco_api, coco_results, task, kpt_oks_sigmas=self._kpt_oks_sigmas,
+                                use_fast_impl=self._use_fast_impl, img_ids=img_ids, max_dets_per_image=self._max_dets_per_image)
 
-            res = self._derive_coco_results(
-                coco_eval, task, class_names=self._metadata.get("thing_classes")
-            )
+            res = self._derive_coco_results(coco_eval, task, class_names=self._metadata.get("thing_classes"))
             self._results[task] = res
+            if task == "bbox": self._coco_eval_bbox = coco_eval
+            if task == "segm": self._coco_eval_segm = coco_eval

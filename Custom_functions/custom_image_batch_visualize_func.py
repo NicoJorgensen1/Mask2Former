@@ -169,6 +169,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
 # data_batch=None
 # model_done_training = False 
 # data_split = "train"
+# device="cpu"
 
 # Define function to plot the images
 def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False, device="cpu"):
