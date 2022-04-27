@@ -147,7 +147,8 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
             [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
             if all([np.mod(np.add(epoch,1), FLAGS.display_rate) == 0, hyperparameter_optimization==False, "nico" not in os.getenv("DETECTRON2_DATASETS").lower()]): # Every 'display_rate' epochs ...
-                _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
+                try: _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
+                except: pass 
             
             # Performing callbacks
             if FLAGS.inference_only==False and hyperparameter_optimization==False: 
