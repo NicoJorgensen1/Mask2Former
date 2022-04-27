@@ -82,5 +82,7 @@ os.remove(os.path.join(cfg.OUTPUT_DIR, "log.txt"))                              
 write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
 if "nico" not in Mask2Former_dir.lower():
     try: visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True)  # Visualize the images again after training 
-    except: pass 
+    except Exception as ex:
+        error_str = "An exception of type {0} occured while visualizing images after training. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
+        printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
 zip_output(cfg)                                                                                         # Zip the final output dir
