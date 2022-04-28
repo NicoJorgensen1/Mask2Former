@@ -56,7 +56,9 @@ printAndLog(input_to_write=model_analysis, logs=log_file, oneline=False, length=
 data_batches = None 
 if "nico" not in Mask2Former_dir.lower():
     try: fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS)      # Visual some segmentation on random images before training
-    except: pass 
+    except Exception as ex:
+        error_str = "An exception of type {0} occured while visualizing images before training. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
+        printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
 
 # Train the model with the best found hyperparameters
 history, test_history, new_best, best_epoch, cfg = objective_train_func(trial=trial, FLAGS=FLAGS,       # Start the training with ...

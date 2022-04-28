@@ -153,6 +153,7 @@ cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                              
 # Create the log file
 log_file = os.path.join(cfg.OUTPUT_DIR, "Training_logs.txt")                            # Initiate the log filename
 if os.path.exists(log_file): os.remove(log_file)                                        # Remove an earlier logfile if that already exists (which it shouldn't)
+FLAGS.log_file = log_file                                                               # Assign the logfile to the FLAGS arguments 
 
 
 # Initiate the log file

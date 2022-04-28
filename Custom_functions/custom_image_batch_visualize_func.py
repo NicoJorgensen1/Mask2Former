@@ -11,6 +11,7 @@ from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_tra
 from mask2former import MaskFormerInstanceDatasetMapper
 from detectron2.engine.defaults import DefaultPredictor
 from mask2former.modeling.matcher import HungarianMatcher
+from custom_mask2former_setup_func import printAndLog                                       # Function to log results
 
 
 
@@ -134,7 +135,12 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         # The ground truth prediction image 
         true_classes = data["instances"].get_fields()["gt_classes"].numpy().tolist()        # Get the true class labels for the instances on the current image
         true_masks = [x for x in data["instances"].get_fields()["gt_masks"].numpy()]        # Get the true binary masks for the instances on the current image
-        y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data)  # Create a mask image for the true masks
+        try:
+            y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data)  # Create a mask image for the true masks
+        except Exception as ex:
+            y_true = deepcopy(img)  
+            error_string = "An exception of type {} occured while creating the y_true image. Arguments:\n{!r}".format(type(ex).__name__, ex.args)
+            printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
 
         # The predicted image 
         y_pred_dict = predictor.__call__(img)["instances"].get_fields()                     # y_pred_dict is a dict with keys ['pred_masks', 'pred_boxes', 'scores', 'pred_classes']
@@ -151,7 +157,12 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         for mask_pred_idx, lbl_pred_idx in zip(matched_output[0], matched_output[1]):       # ... where the indices refer to the indices of predicted mask from the outputs dictionary and the predicted class
             y_pred_masks.append(pred_masks[mask_pred_idx].cpu().numpy().astype(np.uint8))   # Append the predicted mask to the list of predicted masks
             y_pred_lbls.append(pred_classes[lbl_pred_idx].cpu().numpy().item())             # Append the predicted class label to the list of predicted labels 
-        y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
+        try:
+            y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
+        except Exception as ex:
+            y_pred = deepcopy(img) 
+            error_string = "An exception of type {} occured while creating the y_pred image. Arguments:\n{!r}".format(type(ex).__name__, ex.args)
+            printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
         
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
