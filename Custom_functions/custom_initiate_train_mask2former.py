@@ -23,6 +23,8 @@ assert os.path.isdir(dataset_dir), "The dataset directory doesn't exist in the c
 os.environ["DETECTRON2_DATASETS"] = dataset_dir
 
 # Import important libraries
+# import tracemalloc
+# tracemalloc.start()
 from custom_callback_functions import keepAllButLatestAndBestModel                                      # Used for setting model weights on the config
 from custom_mask2former_setup_func import getBestEpochResults, zip_output, write_config_to_file         # Get metrics from the best epoch, zip output directory and write config to file
 from custom_print_and_log_func import printAndLog                                                       # Function to log the results

@@ -167,8 +167,13 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             new_best, best_epoch = updateLogsFunc(log_file=logs, FLAGS=FLAGS, history=history, best_val=new_best,
                     train_start=train_start_time, epoch_start=epoch_start_time, best_epoch=best_epoch,
                     cur_epoch=FLAGS.HPO_current_trial if hyperparameter_optimization else epoch)
-            HPO_visualize = True if all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 50]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 40]) else False
+            try:
+                HPO_visualize = True if all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 50]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 40]) else False
+            except Exception as ex:
+                error_string = "An exception of type {} occured while doing {} {}/{} while creating the HPO_visualize variable. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, epochs_to_run, ex.args)
+                printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
             if all([np.mod(np.add(epoch,1), FLAGS.display_rate) == 0, hyperparameter_optimization==False]) or all([hyperparameter_optimization, HPO_visualize]): # Every 'display_rate' epochs ...
+                printAndLog(input_to_write="Now we'll visualize a batch of images")
                 try: _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
                 except Exception as ex:
                     error_string = "An exception of type {} occured while visualizing images {} doing {} {}. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, ex.args)

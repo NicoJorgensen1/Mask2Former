@@ -121,7 +121,7 @@ def updateLogsFunc(log_file, FLAGS, history, best_val, train_start, epoch_start,
     currently_training = any([FLAGS.HPO_current_trial >= FLAGS.num_trials, FLAGS.hp_optim==False])
     if np.abs(new_best-best_val) >= FLAGS.min_delta:
         train_type = "Epoch" if currently_training else "Trial"
-        performance_string = "{:s}{:d}: The {:s} has improved from {:.3f} to {:.3f}".format(train_type.ljust(9), epoch, FLAGS.eval_metric, best_val, new_best)
+        performance_string = "{:s}{:d}: The {:s} has improved from {:.3f} to {:.3f}".format(train_type.ljust(8), epoch, FLAGS.eval_metric, best_val, new_best)
         if currently_training == False:
             study_direction = "minimize" if "loss" in FLAGS.eval_metric else "maximize"
             if "minimize" in study_direction and new_best < FLAGS.HPO_best_metric: FLAGS.HPO_best_metric = float(new_best)
