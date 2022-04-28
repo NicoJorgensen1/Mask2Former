@@ -45,12 +45,13 @@ def object_func(trial):
     new_best = float("nan")
     it_count = 0
     while np.isnan(new_best):                                                                       # Sometimes the iteration fails for some reason. We'll allow 3 attempts before skipping and moving on
-        try:
-            new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=["this is an empty list"], hyperparameter_optimization=True)
-        except Exception as ex:
-            error_str = "An exception of type {0} occured. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
-            printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
-            new_best = float("nan")
+        new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=["this is an empty list"], hyperparameter_optimization=True)
+        # try:
+        #     new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=["this is an empty list"], hyperparameter_optimization=True)
+        # except Exception as ex:
+        #     error_str = "An exception of type {0} occured. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
+        #     printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
+        #     new_best = float("nan")
         it_count += 1
         if it_count >= 3:
             printAndLog(input_to_write="", logs=log_file, print_str=False)
