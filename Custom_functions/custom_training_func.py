@@ -173,7 +173,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                 error_string = "An exception of type {} occured while doing {} {}/{} while creating the HPO_visualize variable. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, epochs_to_run, ex.args)
                 printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
             if all([np.mod(np.add(epoch,1), FLAGS.display_rate) == 0, hyperparameter_optimization==False]) or all([hyperparameter_optimization, HPO_visualize]): # Every 'display_rate' epochs ...
-                printAndLog(input_to_write="Now we'll visualize a batch of images")
+                printAndLog(input_to_write="Now we'll visualize a batch of images", logs=logs)
                 try: _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
                 except Exception as ex:
                     error_string = "An exception of type {} occured while visualizing images {} doing {} {}. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, ex.args)
