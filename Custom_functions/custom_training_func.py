@@ -171,7 +171,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             new_best, best_epoch = updateLogsFunc(log_file=logs, FLAGS=FLAGS, history=history, best_val=new_best,
                     train_start=train_start_time, epoch_start=epoch_start_time, best_epoch=best_epoch,
                     cur_epoch=FLAGS.HPO_current_trial if hyperparameter_optimization else epoch)
-            if quit_training == True:                                                                       # If the early stopping callback says we need to quit the training ...
+            if all([quit_training,  hyperparameter_optimization==False]):                                   # If the early stopping callback says we need to quit the training ...
                 printAndLog(input_to_write="Committing early stopping at epoch {:d}. The best {:s} is {:.3f} from epoch {:d}".format(epoch+1, FLAGS.eval_metric, new_best, best_epoch), logs=logs)
                 break                                                                                       # break the for loop and stop running more epochs
         except Exception as ex:

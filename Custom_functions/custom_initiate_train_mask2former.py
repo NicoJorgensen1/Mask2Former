@@ -33,12 +33,6 @@ from custom_HPO_func import perform_HPO                                         
 from custom_training_func import get_HPO_params                                                         # Function to change the config and FLAGS parameters 
 
 
-#####
-##### Precision and Recall metrics are missing for the evaluation 
-##### Draw a precision-recall curve
-##### 
-
-
 # Get the FLAGS, the config and the logfile. 
 FLAGS, cfg, trial, log_file = perform_HPO()                                                             # Perform HPO if that is chosen 
 write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
@@ -66,7 +60,7 @@ history, test_history, new_best, best_epoch, cfg = objective_train_func(trial=tr
 printAndLog(input_to_write="Now training is completed", logs=log_file)
 
 # Add the model checkpoint with the best performing weights to the config 
-cfg = keepAllButLatestAndBestModel(config=cfg, history=history, FLAGS=FLAGS, bestOrLatest="best")       # Put the model weights for the best performing model on the config
+cfg = keepAllButLatestAndBestModel(config=cfg, history=history, FLAGS=FLAGS, bestOrLatest="best", logs=log_file)    # Put the model weights for the best performing model on the config
 
 # Print and log the best metric results
 printAndLog(input_to_write="Final results:".upper(), logs=log_file)

@@ -90,7 +90,7 @@ def perform_HPO():                                                              
         printAndLog(input_to_write={key: best_params[key] for key in sorted(best_params.keys(), reverse=True)}, logs=log_file, prefix="", postfix="\n", length=15)
         FLAGS.warm_up_epochs = warm_ups
 
-        # Create a new study object only containing the 10 best and worst trials - just used for plotting the parallel plot
+        # Create a new study object only containing the 5 best and worst trials - just used for plotting the parallel plot
         trials_list, eval_metric_list = list(), list()
         for hpo_trial in study.trials:
             if hpo_trial.values is None: continue
