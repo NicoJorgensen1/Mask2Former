@@ -130,6 +130,12 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)     # ... Hungarian Matcher class
     img_ytrue_ypred = {"input": list(), "y_pred": list(), "y_true": list(), "PN": list()}   # Initiate a dictionary to store the input images, ground truth masks and the predicted masks
     for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloade
+        print("this is the databatch {}".format(data_batch))
+        print("This is the data {}".format(data))
+        print("The data is of type {}".format(type(data)))
+        print("The first element of data is of type {}".format(type(data[0])))
+        print("The first element of data contains following keys {}".format(data[0].keys()))
+
         img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Make input image numpy format and [H,W,C]
         
         # The ground truth prediction image 
