@@ -154,11 +154,6 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                         metrics_eval=eval_val_results["segm"], history=history)                             # ... including all training and validation metrics
             save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
             [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
-            if all([np.mod(np.add(epoch,1), FLAGS.display_rate) == 0, hyperparameter_optimization==False, "nico" not in os.getenv("DETECTRON2_DATASETS").lower()]) or all([hyperparameter_optimization, history[FLAGS.eval_metric] >= FLAGS.HPO_best_metric >= 40]): # Every 'display_rate' epochs ...
-                try: _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
-                except Exception as ex:
-                    error_string = "An exception of type {} occured while visualizing images {} doing {} {}. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, ex.args)
-                    printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
             
             # Performing callbacks
             if FLAGS.inference_only==False and hyperparameter_optimization==False: 
@@ -168,9 +163,16 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                     FLAGS.learning_rate = config.SOLVER.BASE_LR                                             # Update the FLAGS.learning_rate value
                 if epoch+1 >= FLAGS.early_stop_patience:                                                    # If the model has trained for more than 'early_stopping_patience' epochs ...
                     quit_training = early_stopping(history=history, FLAGS=FLAGS)                            # ... perform the early stopping callback
+            earlier_HPO_best = deepcopy(FLAGS.HPO_best_metric)                                              # Read the earlier best HPO value 
             new_best, best_epoch = updateLogsFunc(log_file=logs, FLAGS=FLAGS, history=history, best_val=new_best,
                     train_start=train_start_time, epoch_start=epoch_start_time, best_epoch=best_epoch,
                     cur_epoch=FLAGS.HPO_current_trial if hyperparameter_optimization else epoch)
+            HPO_visualize = True if all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 50]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 40]) else False
+            if all([np.mod(np.add(epoch,1), FLAGS.display_rate) == 0, hyperparameter_optimization==False]) or all([hyperparameter_optimization, HPO_visualize]): # Every 'display_rate' epochs ...
+                try: _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
+                except Exception as ex:
+                    error_string = "An exception of type {} occured while visualizing images {} doing {} {}. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, ex.args)
+                    printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
             if all([quit_training,  hyperparameter_optimization==False]):                                   # If the early stopping callback says we need to quit the training ...
                 printAndLog(input_to_write="Committing early stopping at epoch {:d}. The best {:s} is {:.3f} from epoch {:d}".format(epoch+1, FLAGS.eval_metric, new_best, best_epoch), logs=logs)
                 break                                                                                       # break the for loop and stop running more epochs

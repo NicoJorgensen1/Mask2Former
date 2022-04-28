@@ -48,11 +48,10 @@ printAndLog(input_to_write=model_analysis, logs=log_file, oneline=False, length=
 
 # Visualize some random images before training  => this will for some reason kill the process on my local machine ...
 data_batches = None 
-if "nico" not in Mask2Former_dir.lower():
-    try: fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS)      # Visual some segmentation on random images before training
-    except Exception as ex:
-        error_str = "An exception of type {0} occured while visualizing images before training. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
-        printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
+try: fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS)      # Visual some segmentation on random images before training
+except Exception as ex:
+    error_str = "An exception of type {0} occured while visualizing images before training. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
+    printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
 
 # Train the model with the best found hyperparameters
 history, test_history, new_best, best_epoch, cfg = objective_train_func(trial=trial, FLAGS=FLAGS,       # Start the training with ...
@@ -76,9 +75,8 @@ if "vitrolife" in FLAGS.dataset_name.lower():                                   
 [os.remove(os.path.join(cfg.OUTPUT_DIR, x)) for x in os.listdir(cfg.OUTPUT_DIR) if "metrics" in x.lower() and x.endswith(".json")]  # Remove all metrics files
 os.remove(os.path.join(cfg.OUTPUT_DIR, "log.txt"))                                                      # Remove the original log file 
 write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
-if "nico" not in Mask2Former_dir.lower():
-    try: visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True)  # Visualize the images again after training 
-    except Exception as ex:
-        error_str = "An exception of type {0} occured while visualizing images after training. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
-        printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
+try: visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True)  # Visualize the images again after training 
+except Exception as ex:
+    error_str = "An exception of type {0} occured while visualizing images after training. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
+    printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
 zip_output(cfg)                                                                                         # Zip the final output dir
