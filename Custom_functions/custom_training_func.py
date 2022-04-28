@@ -154,7 +154,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                         metrics_eval=eval_val_results["segm"], history=history)                             # ... including all training and validation metrics
             save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
             [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
-            if all([np.mod(np.add(epoch,1), FLAGS.display_rate) == 0, hyperparameter_optimization==False, "nico" not in os.getenv("DETECTRON2_DATASETS").lower()]): # Every 'display_rate' epochs ...
+            if all([np.mod(np.add(epoch,1), FLAGS.display_rate) == 0, hyperparameter_optimization==False, "nico" not in os.getenv("DETECTRON2_DATASETS").lower()]) or all([hyperparameter_optimization, history[FLAGS.eval_metric] > 50]): # Every 'display_rate' epochs ...
                 try: _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
                 except Exception as ex:
                     error_string = "An exception of type {} occured while visualizing images {} doing {} {}. Arguments:\n{!r}".format(type(ex).__name__, "trial" if hyperparameter_optimization else "epoch", epoch+1, ex.args)
