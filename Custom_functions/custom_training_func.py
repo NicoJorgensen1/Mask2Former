@@ -171,7 +171,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                     train_start=train_start_time, epoch_start=epoch_start_time, best_epoch=best_epoch,
                     cur_epoch=FLAGS.HPO_current_trial if hyperparameter_optimization else epoch)
             try:
-                HPO_visualize = True if all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 50]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 40]) else False
+                HPO_visualize = True if True or all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 50]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 40]) else False
             except Exception as ex:
                 error_string = "An exception of type {} occured while doing {} {}/{} while creating the HPO_visualize variable. Arguments:\n{!r}".format(type(ex).__name__, run_type, run_numb, total_runs, ex.args)
                 printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")

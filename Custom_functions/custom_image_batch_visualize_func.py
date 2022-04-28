@@ -194,26 +194,34 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
                 unit="Data_split", ascii=True, desc="Dataset split {:d}/{:d}".format(data_split_count, 3),
                 bar_format="{desc}  | {percentage:3.0f}% | {bar:35}| {n_fmt}/{total_fmt} [Spent: {elapsed}. Remaining: {remaining}{postfix}]"):      
         data_split_count += 1
-        if "vitrolife" not in FLAGS.dataset_name.lower() and data_split=="test": continue   # Only vitrolife has a test dataset. ADE20K doesn't. 
-        # Extract information about the dataset used
-        img_ytrue_ypred, data_batch, FLAGS, config = create_batch_img_ytrue_ypred(config=config, data_split=data_split, # Create the batch of images that needs to be visualized ...
-            FLAGS=FLAGS, data_batch=data_batch, model_done_training=model_done_training, device=device) # ... and return the images in the data_batch dictionary
-        if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are working on the vitrolife dataset sort the ...
-            data_batch = sorted(data_batch, key=lambda x: x["image_custom_info"]["PN_image"])   # ... data_batch after the number of PN per found image
-            img_ytrue_ypred = sort_dictionary_by_PN(data=img_ytrue_ypred)                   # And then also sort the data dictionary
-        num_rows, num_cols = 3, len(data_batch)                                             # The figure will have three rows (input, y_pred, y_true) and one column per image
-        fig = plt.figure(figsize=(int(np.ceil(len(data_batch)*4)), 12))                     # Create the figure object
-        row = 0                                                                             # Initiate the row index counter (all manual indexing could have been avoided by having created img_ytrue_ypred as an OrderedDict)
+        try:
+            if "vitrolife" not in FLAGS.dataset_name.lower() and data_split=="test": continue   # Only vitrolife has a test dataset. ADE20K doesn't. 
+            # Extract information about the dataset used
+            img_ytrue_ypred, data_batch, FLAGS, config = create_batch_img_ytrue_ypred(config=config, data_split=data_split, # Create the batch of images that needs to be visualized ...
+                FLAGS=FLAGS, data_batch=data_batch, model_done_training=model_done_training, device=device) # ... and return the images in the data_batch dictionary
+            if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are working on the vitrolife dataset sort the ...
+                data_batch = sorted(data_batch, key=lambda x: x["image_custom_info"]["PN_image"])   # ... data_batch after the number of PN per found image
+                img_ytrue_ypred = sort_dictionary_by_PN(data=img_ytrue_ypred)                   # And then also sort the data dictionary
+            num_rows, num_cols = 3, len(data_batch)                                             # The figure will have three rows (input, y_pred, y_true) and one column per image
+            fig = plt.figure(figsize=(int(np.ceil(len(data_batch)*4)), 12))                     # Create the figure object
+            row = 0                                                                             # Initiate the row index counter (all manual indexing could have been avoided by having created img_ytrue_ypred as an OrderedDict)
+        except Exception as ex:
+            error_string = "An exception of type {} occured before creating the figure when visualizing data of the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
+            printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
         for key in img_ytrue_ypred.keys():                                                  # Loop through all the keys in the batch dictionary
-            if key.lower() not in ['input', 'y_true', 'y_pred']: continue                   # If the key is not one of (input, y_pred, y_true), we simply skip to the next one
-            for col, img in enumerate(img_ytrue_ypred[key]):                                # Loop through all available images in the dictionary
-                plt.subplot(num_rows, num_cols, row*num_cols+col+1)                         # Create the subplot instance
-                plt.axis("off")                                                             # Remove axis tickers
-                if "vitrolife" in FLAGS.dataset_name.lower():                               # If we are visualizing the vitrolife dataset
-                    plt.title("{:s} with {:.0f} PN".format(key, img_ytrue_ypred["PN"][col]), fontdict=fontdict) # Create the title for the plot with the number of PN
-                else: plt.title("{:s}".format(key), fontdict=fontdict)                      # Otherwise simply put the key, i.e. either input, y_pred or y_true.
-                plt.imshow(img, cmap="gray")                                                # Display the image
-            row += 1                                                                        # Increase the row counter by 1
+            try:
+                if key.lower() not in ['input', 'y_true', 'y_pred']: continue                   # If the key is not one of (input, y_pred, y_true), we simply skip to the next one
+                for col, img in enumerate(img_ytrue_ypred[key]):                                # Loop through all available images in the dictionary
+                    plt.subplot(num_rows, num_cols, row*num_cols+col+1)                         # Create the subplot instance
+                    plt.axis("off")                                                             # Remove axis tickers
+                    if "vitrolife" in FLAGS.dataset_name.lower():                               # If we are visualizing the vitrolife dataset
+                        plt.title("{:s} with {:.0f} PN".format(key, img_ytrue_ypred["PN"][col]), fontdict=fontdict) # Create the title for the plot with the number of PN
+                    else: plt.title("{:s}".format(key), fontdict=fontdict)                      # Otherwise simply put the key, i.e. either input, y_pred or y_true.
+                    plt.imshow(img, cmap="gray")                                                # Display the image
+                row += 1                                                                        # Increase the row counter by 1
+            except Exception as ex:
+                error_string = "An exception of type {} occured while creating the figure when visualizing images of the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
+                printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
         try: fig = move_figure_position(fig=fig, position=position)                         # Try and move the figure to the wanted position (only possible on home computer with a display)
         except: pass                                                                        # Except, simply just let the figure retain the current position
         fig_name_init = "Segmented_{:s}_data_samples_from_".format(data_split)              # Initialize the figure name
