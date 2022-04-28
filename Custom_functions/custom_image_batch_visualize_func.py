@@ -106,6 +106,7 @@ def draw_mask_image(mask_list, lbl_list, meta_data):
 # Define a function to predict some label-masks for the dataset
 def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False, device="cpu"):
     if model_done_training==False: config = putModelWeights(config)                         # Change the config and append the latest model as the used checkpoint, if the model is still training
+    printAndLog(input_to_write="Inside the function => The type of data_batch {}.\nThe databatch {}".format(type(data_batch), data_batch), logs=FLAGS.log_file)
     if data_batch == None:                                                                  # If no batch with data was send to the function ...
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # ... and if we are using the vitrolife dataset
             dataset_dicts = vitrolife_dataset_function(data_split, debugging=True)          # ... the list of dataset_dicts from vitrolife is computed.
@@ -189,8 +190,10 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
 def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False, device="cpu"):
     # Get the datasplit and number of images to show
     fig_list, data_batches_final = list(), list()                                           # Initiate the list to store the figures in
+    printAndLog(input_to_write="Outside the function 1 => The type of data_batch {}.\nThe databatch {}".format(type(data_batch), data_batch), logs=FLAGS.log_file)
     if data_batches==None:                                                                  # If no previous data has been sent ...
         data_batches = [None, None, None]                                                   # ... it must be a list of None's...
+    printAndLog(input_to_write="Outside the function 2 => The type of data_batch {}.\nThe databatch {}".format(type(data_batch), data_batch), logs=FLAGS.log_file)
     data_split_count = 1                                                                    # Initiate the datasplit counter
     fontdict = {'fontsize': 25}                                                             # Set the font size for the plot
     for data_split, data_batch in tqdm(zip(["train", "val", "test"], data_batches),         # Iterate through the three splits available
