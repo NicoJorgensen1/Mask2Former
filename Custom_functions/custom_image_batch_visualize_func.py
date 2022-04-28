@@ -139,7 +139,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data)  # Create a mask image for the true masks
         except Exception as ex:
             y_true = deepcopy(img)  
-            error_string = "An exception of type {} occured while creating the y_true image. Arguments:\n{!r}".format(type(ex).__name__, ex.args)
+            error_string = "An exception of type {} occured while creating the y_true image for the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
             printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
 
         # The predicted image 
@@ -161,7 +161,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
         except Exception as ex:
             y_pred = deepcopy(img) 
-            error_string = "An exception of type {} occured while creating the y_pred image. Arguments:\n{!r}".format(type(ex).__name__, ex.args)
+            error_string = "An exception of type {} occured while creating the y_pred image for the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
             printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
         
         # Append the input image, y_true and y_pred to the dictionary
