@@ -199,6 +199,10 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
             # Extract information about the dataset used
             img_ytrue_ypred, data_batch, FLAGS, config = create_batch_img_ytrue_ypred(config=config, data_split=data_split, # Create the batch of images that needs to be visualized ...
                 FLAGS=FLAGS, data_batch=data_batch, model_done_training=model_done_training, device=device) # ... and return the images in the data_batch dictionary
+        except Exception as ex:
+            error_string = "An exception of type {} occured while creating the image batch data of the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
+            printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
+        try:
             if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are working on the vitrolife dataset sort the ...
                 data_batch = sorted(data_batch, key=lambda x: x["image_custom_info"]["PN_image"])   # ... data_batch after the number of PN per found image
                 img_ytrue_ypred = sort_dictionary_by_PN(data=img_ytrue_ypred)                   # And then also sort the data dictionary
@@ -206,7 +210,7 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
             fig = plt.figure(figsize=(int(np.ceil(len(data_batch)*4)), 12))                     # Create the figure object
             row = 0                                                                             # Initiate the row index counter (all manual indexing could have been avoided by having created img_ytrue_ypred as an OrderedDict)
         except Exception as ex:
-            error_string = "An exception of type {} occured before creating the figure when visualizing data of the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
+            error_string = "An exception of type {} occured sorting the image batch by PN's of the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
             printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
         for key in img_ytrue_ypred.keys():                                                  # Loop through all the keys in the batch dictionary
             try:
