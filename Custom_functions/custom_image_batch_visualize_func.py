@@ -83,12 +83,14 @@ def sort_dictionary_by_PN(data):
 
 
 # Function to create an image from a list of masks and labels
-def draw_mask_image(mask_list, lbl_list, meta_data):
+def draw_mask_image(mask_list, lbl_list, meta_data, FLAGS):
     class_colors = meta_data.thing_colors                                                   # Get the colors that the classes must be visualized with 
     class_names = deepcopy(meta_data.thing_classes)                                         # Read the class names present in the dataset
-    final_im = np.zeros(shape=mask_list[0].shape+(3,), dtype=np.uint8)                           # Initiate a colored image to show the masks as a single image 
+    final_im = np.zeros(shape=mask_list[0].shape+(3,), dtype=np.uint8)                      # Initiate a colored image to show the masks as a single image 
     PN_count = 0                                                                            # Make a counter to keep track of the PN's in the current image
     for lbl, mask in zip(lbl_list, mask_list):                                              # Iterate through the labels and masks
+        if np.sum(mask) < 5:
+            printAndLog(input_to_write="The sum of the mask now is just {} with unique values".format(np.sum(mask), np.unique(mask)), logs=FLAGS.log_file)
         lbl = lbl                                                                           # Extract the current object label as a scalar 
         class_name = class_names[lbl]                                                       # Find the class name of the current object 
         col_idx = np.where(np.in1d(class_names, class_name))[0].item() + PN_count           # Compute which color the current object will have in the final image 
@@ -152,12 +154,12 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         for mask_pred_idx, lbl_pred_idx in zip(matched_output[0], matched_output[1]):       # ... where the indices refer to the indices of predicted mask from the outputs dictionary and the predicted class
             y_pred_masks.append(pred_masks[mask_pred_idx].cpu().numpy().astype(np.uint8))   # Append the predicted mask to the list of predicted masks
             y_pred_lbls.append(pred_classes[lbl_pred_idx].cpu().numpy().item())             # Append the predicted class label to the list of predicted labels 
-        # try:
-        y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
-        # except Exception as ex:
-        #     y_pred = deepcopy(img) 
-        #     error_string = "An exception of type {} occured while creating the y_pred image for the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
-        #     printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
+        try:
+            y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data, FLAGS=FLAGS) # Create a mask image for the true masks
+        except Exception as ex:
+            y_pred = deepcopy(img) 
+            error_string = "An exception of type {} occured while creating the y_pred image for the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
+            printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
         
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
