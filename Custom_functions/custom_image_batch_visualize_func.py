@@ -115,9 +115,11 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             augmentations = []                                                              # ... the augmentations will be the training augmentations 
         else:                                                                               # Else, if we are on the validation or test split ...
             augmentations = []                                                              # ... we will use no type of augmentations 
+        printAndLog(input_to_write="This is the length of dataset_dicts {}".format(len(dataset_dicts)), logs=FLAGS.log_file)
         data_mapper = MaskFormerInstanceDatasetMapper(cfg=config, is_train=True, augmentations=augmentations)   # Use the standard instance segmentation mapper 
         dataloader = build_detection_train_loader(dataset_dicts, mapper=data_mapper, total_batch_size=np.min([FLAGS.num_images, len(dataset_dicts)]))   # Create the dataloader
         data_batch = next(iter(dataloader))                                                 # Extract the next batch from the dataloader
+    printAndLog(input_to_write="now going to second  {}".format(len(dataset_dicts)), logs=FLAGS.log_file)
     dataset_name = config.DATASETS.TRAIN[0] if "train" in data_split else config.DATASETS.TEST[0]   # Extract the dataset name 
     meta_data = MetadataCatalog.get(dataset_name)                                           # Read the metadata for the current image 
     
