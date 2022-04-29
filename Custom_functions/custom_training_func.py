@@ -172,7 +172,6 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                 cur_epoch=FLAGS.HPO_current_trial if hyperparameter_optimization else epoch)
         HPO_visualize = True if all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 50]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 40]) else False
         if True or all([np.mod(np.add(epoch,1), FLAGS.display_rate) == 0, hyperparameter_optimization==False]) or all([hyperparameter_optimization, HPO_visualize]): # Every 'display_rate' epochs ...
-            printAndLog(input_to_write="Now we'll visualize a batch of images", logs=logs, postfix="\n")
             # try: 
             _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
             # except Exception as ex:

@@ -93,7 +93,7 @@ def apply_colormap(mask, meta_data):
 
 
 # Function to create an image from a list of masks and labels
-def draw_mask_image(mask_list, lbl_list, meta_data, FLAGS):
+def draw_mask_image(mask_list, lbl_list, meta_data):
     class_colors = meta_data.thing_colors                                                   # Get the colors that the classes must be visualized with 
     class_names = deepcopy(meta_data.thing_classes)                                         # Read the class names present in the dataset
     final_im = np.zeros(shape=mask_list[0].shape+(3,), dtype=np.uint8)                      # Initiate a colored image to show the masks as a single image 
@@ -102,6 +102,7 @@ def draw_mask_image(mask_list, lbl_list, meta_data, FLAGS):
         class_name = class_names[lbl]                                                       # Find the class name of the current object 
         col_idx = np.where(np.in1d(class_names, class_name))[0].item() + PN_count           # Compute which color the current object will have in the final image 
         col = class_colors[col_idx]                                                         # Extract the thing color needed for the current object
+        if len(np.where(mask)[0]) < 4: continue                                             # If less than four points are positive in the current mask, skip this mask, as we then can't draw a bounding box
         if class_name == "PN":                                                              # If the current object is a PN ...
             PN_count += 1                                                                   # ... increase the PN counter
         final_im[mask.astype(bool)] = col                                                   # Assign all pixels from the current object with the specified pixel color value 
@@ -109,8 +110,6 @@ def draw_mask_image(mask_list, lbl_list, meta_data, FLAGS):
         x1, y1 = np.amin(bbox_coordinates, axis=1)                                          # Extract the minimum x and y white pixel values
         x2, y2 = np.amax(bbox_coordinates, axis=1)                                          # Extract the maximum x and y white pixel values
         final_im = cv2.rectangle(final_im, (y1,x1), (y2,x2),col, 2)                         # Overlay the bounding box for the current object on the current image 
-    # plt.imshow(final_im, cmap="gray")
-    # plt.show(block=False)
     return final_im                                                                         # Return the final image 
 
 
@@ -146,7 +145,11 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         # The ground truth prediction image 
         true_classes = data["instances"].get_fields()["gt_classes"].numpy().tolist()        # Get the true class labels for the instances on the current image
         true_masks = [x.astype(bool) for x in data["instances"].get_fields()["gt_masks"].numpy()]   # Get the true binary masks for the instances on the current image
-        y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data, FLAGS=FLAGS)  # Create a mask image for the true masks
+        y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data)  # Create a mask image for the true masks
+        plt.imshow(y_true)
+        plt.show(block=False)
+
+
 
         # The predicted image 
         y_pred_dict = predictor.__call__(img)["instances"].get_fields()                     # y_pred_dict is a dict with keys ['pred_masks', 'pred_boxes', 'scores', 'pred_classes']
@@ -165,7 +168,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         for mask_pred_idx, lbl_pred_idx in zip(mask_pred_indices, lbl_pred_indices):        # ... where the indices refer to the indices of predicted mask from the outputs dictionary and the predicted class
             y_pred_masks.append(pred_masks[mask_pred_idx].cpu().numpy().astype(bool))       # Append the predicted mask to the list of predicted masks
             y_pred_lbls.append(pred_classes[lbl_pred_idx].cpu().numpy().item())             # Append the predicted class label to the list of predicted labels 
-        y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data, FLAGS=FLAGS) # Create a mask image for the true masks
+        y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
         # try:
         #     y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data, FLAGS=FLAGS) # Create a mask image for the true masks
         # except Exception as ex:
