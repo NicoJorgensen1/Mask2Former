@@ -82,16 +82,6 @@ def sort_dictionary_by_PN(data):
     return new_data
 
 
-# Define function to apply a colormap on the images
-def apply_colormap(mask, meta_data):
-    colors_used = meta_data.thing_colors                                                    # Get the colors that the classes must be visualized with 
-    labels_used = deepcopy(meta_data.thing_classes)                                         # Read the class names present in the dataset
-    color_array = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)               # Allocate a RGB 3D array of zeros
-    for label_idx, label in enumerate(labels_used):                                         # Loop through each label from the labels_used found from the MetadataCatalog
-        color_array[mask.astype(bool)] = colors_used[label_idx]                                          # Assign all pixels in the mask with the current label_value the colors_used[idx] value
-    return color_array                                                                      # Return the colored mask
-
-
 # Function to create an image from a list of masks and labels
 def draw_mask_image(mask_list, lbl_list, meta_data):
     class_colors = meta_data.thing_colors                                                   # Get the colors that the classes must be visualized with 
