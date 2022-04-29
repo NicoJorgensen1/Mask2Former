@@ -11,7 +11,7 @@ from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_tra
 from mask2former import MaskFormerInstanceDatasetMapper
 from detectron2.engine.defaults import DefaultPredictor
 from mask2former.modeling.matcher import HungarianMatcher
-from custom_mask2former_setup_func import printAndLog                                       # Function to log results
+from custom_print_and_log_func import printAndLog                                           # Function to log results
 
 
 
@@ -82,6 +82,16 @@ def sort_dictionary_by_PN(data):
     return new_data
 
 
+# Define function to apply a colormap on the images
+def apply_colormap(mask, meta_data):
+    colors_used = meta_data.thing_colors                                                    # Get the colors that the classes must be visualized with 
+    labels_used = deepcopy(meta_data.thing_classes)                                         # Read the class names present in the dataset
+    color_array = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)               # Allocate a RGB 3D array of zeros
+    for label_idx, label in enumerate(labels_used):                                         # Loop through each label from the labels_used found from the MetadataCatalog
+        color_array[mask.astype(bool)] = colors_used[label_idx]                                          # Assign all pixels in the mask with the current label_value the colors_used[idx] value
+    return color_array                                                                      # Return the colored mask
+
+
 # Function to create an image from a list of masks and labels
 def draw_mask_image(mask_list, lbl_list, meta_data, FLAGS):
     class_colors = meta_data.thing_colors                                                   # Get the colors that the classes must be visualized with 
@@ -89,19 +99,18 @@ def draw_mask_image(mask_list, lbl_list, meta_data, FLAGS):
     final_im = np.zeros(shape=mask_list[0].shape+(3,), dtype=np.uint8)                      # Initiate a colored image to show the masks as a single image 
     PN_count = 0                                                                            # Make a counter to keep track of the PN's in the current image
     for lbl, mask in zip(lbl_list, mask_list):                                              # Iterate through the labels and masks
-        if np.sum(mask) < 5:
-            printAndLog(input_to_write="The sum of the mask now is just {} with unique values".format(np.sum(mask), np.unique(mask)), logs=FLAGS.log_file)
-        lbl = lbl                                                                           # Extract the current object label as a scalar 
         class_name = class_names[lbl]                                                       # Find the class name of the current object 
         col_idx = np.where(np.in1d(class_names, class_name))[0].item() + PN_count           # Compute which color the current object will have in the final image 
         col = class_colors[col_idx]                                                         # Extract the thing color needed for the current object
         if class_name == "PN":                                                              # If the current object is a PN ...
             PN_count += 1                                                                   # ... increase the PN counter
-        final_im[mask] = col                                                                # Assign all pixels from the current object with the specified pixel color value 
+        final_im[mask.astype(bool)] = col                                                   # Assign all pixels from the current object with the specified pixel color value 
         bbox_coordinates = np.asarray(np.where(mask))                                       # Get all pixel coordinates for the white pixels in the mask
         x1, y1 = np.amin(bbox_coordinates, axis=1)                                          # Extract the minimum x and y white pixel values
         x2, y2 = np.amax(bbox_coordinates, axis=1)                                          # Extract the maximum x and y white pixel values
         final_im = cv2.rectangle(final_im, (y1,x1), (y2,x2),col, 2)                         # Overlay the bounding box for the current object on the current image 
+    # plt.imshow(final_im, cmap="gray")
+    # plt.show(block=False)
     return final_im                                                                         # Return the final image 
 
 
@@ -136,8 +145,8 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         
         # The ground truth prediction image 
         true_classes = data["instances"].get_fields()["gt_classes"].numpy().tolist()        # Get the true class labels for the instances on the current image
-        true_masks = [x for x in data["instances"].get_fields()["gt_masks"].numpy()]        # Get the true binary masks for the instances on the current image
-        y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data)  # Create a mask image for the true masks
+        true_masks = [x.astype(bool) for x in data["instances"].get_fields()["gt_masks"].numpy()]   # Get the true binary masks for the instances on the current image
+        y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data, FLAGS=FLAGS)  # Create a mask image for the true masks
 
         # The predicted image 
         y_pred_dict = predictor.__call__(img)["instances"].get_fields()                     # y_pred_dict is a dict with keys ['pred_masks', 'pred_boxes', 'scores', 'pred_classes']
@@ -149,17 +158,20 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         targets = [{"labels": data["instances"].get_fields()["gt_classes"],                 # The target must be a list of length batch_size containing ...
                     "masks": data["instances"].get_fields()["gt_masks"]}]                   # ... dicts with keys "labels" and "masks" for each image
         matched_output = matcher.forward(outputs=outputs, targets=targets)[0]               # Performs the Hungarian matching and outputs a list of [[idx_mask], [idx_lbl]] ...
+        mask_pred_indices = matched_output[0].numpy()
+        lbl_pred_indices = matched_output[1].numpy()
         y_pred_masks, y_pred_lbls = list(), list()                                          # Initiate lists to store the predicted masks and predicted labels 
         assert pred_masks.shape[0] == FLAGS.num_queries == outputs["pred_masks"].shape[1], "This fucking has to work"
-        for mask_pred_idx, lbl_pred_idx in zip(matched_output[0], matched_output[1]):       # ... where the indices refer to the indices of predicted mask from the outputs dictionary and the predicted class
-            y_pred_masks.append(pred_masks[mask_pred_idx].cpu().numpy().astype(np.uint8))   # Append the predicted mask to the list of predicted masks
+        for mask_pred_idx, lbl_pred_idx in zip(mask_pred_indices, lbl_pred_indices):        # ... where the indices refer to the indices of predicted mask from the outputs dictionary and the predicted class
+            y_pred_masks.append(pred_masks[mask_pred_idx].cpu().numpy().astype(bool))       # Append the predicted mask to the list of predicted masks
             y_pred_lbls.append(pred_classes[lbl_pred_idx].cpu().numpy().item())             # Append the predicted class label to the list of predicted labels 
-        try:
-            y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data, FLAGS=FLAGS) # Create a mask image for the true masks
-        except Exception as ex:
-            y_pred = deepcopy(img) 
-            error_string = "An exception of type {} occured while creating the y_pred image for the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
-            printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
+        y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data, FLAGS=FLAGS) # Create a mask image for the true masks
+        # try:
+        #     y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data, FLAGS=FLAGS) # Create a mask image for the true masks
+        # except Exception as ex:
+        #     y_pred = deepcopy(img) 
+        #     error_string = "An exception of type {} occured while creating the y_pred image for the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
+        #     printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
         
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
@@ -178,6 +190,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
 # model_done_training = False 
 # data_split = "train"
 # device="cpu"
+# config = cfg
 
 # Define function to plot the images
 def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False, device="cpu"):

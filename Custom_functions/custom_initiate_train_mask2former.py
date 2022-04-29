@@ -50,8 +50,9 @@ printAndLog(input_to_write="Model analysis:".upper(), logs=log_file)            
 printAndLog(input_to_write=model_analysis, logs=log_file, oneline=False, length=27)                     # ... and write it to the logfile
 
 # Visualize some random images before training  => this will for some reason kill the process on my local machine ...
-if "nico" not in Mask2Former_dir.lower():
-    fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS)           # Visual some segmentation on random images before training
+data_batches = None 
+# if "nico" not in Mask2Former_dir.lower():
+fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS)           # Visual some segmentation on random images before training
 
 # Train the model with the best found hyperparameters
 history, test_history, new_best, best_epoch, cfg = objective_train_func(trial=trial, FLAGS=FLAGS,       # Start the training with ...
