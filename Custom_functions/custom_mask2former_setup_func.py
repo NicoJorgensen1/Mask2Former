@@ -100,14 +100,14 @@ parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of 
 parser.add_argument("--num_queries", type=int, default=75, help="The number of queries used for training. Default: 100")
 parser.add_argument("--batch_size", type=int, default=1, help="The batch size used for training the model. Default: 1")
 parser.add_argument("--num_images", type=int, default=6, help="The number of images to display/segment. Default: 6")
-parser.add_argument("--num_trials", type=int, default=2, help="The number of trials to run HPO for. Only relevant if '--hp_optim==True'. Default: 300")
+parser.add_argument("--num_trials", type=int, default=1000, help="The number of trials to run HPO for. Only relevant if '--hp_optim==True'. Default: 300")
 parser.add_argument("--num_random_trials", type=int, default=100, help="The number of random trials to run initiate the HPO for. Only relevant if '--hp_optim==True'. Default: 30")
 parser.add_argument("--display_rate", type=int, default=5, help="The epoch_rate of how often to display image segmentations. A display_rate of 3 means that every third epoch, visual segmentations are saved. Default: 5")
 parser.add_argument("--gpus_used", type=int, default=1, help="The number of GPU's to use for training. Only applicable for training with ADE20K. This input argument deprecates the '--num-gpus' argument. Default: 1")
-parser.add_argument("--num_epochs", type=int, default=2, help="The number of epochs to train the model for. Default: 1")
+parser.add_argument("--num_epochs", type=int, default=150, help="The number of epochs to train the model for. Default: 1")
 parser.add_argument("--warm_up_epochs", type=int, default=5, help="The number of epochs to warm up the learning rate when training. Will go from 1/100 '--learning_rate' to '--learning_rate' during these warm_up_epochs. Default: 3")
-parser.add_argument("--patience", type=int, default=5, help="The number of epochs to accept that the model hasn't improved before lowering the learning rate by a factor '--lr_gamma'. Default: 5")
-parser.add_argument("--early_stop_patience", type=int, default=13, help="The number of epochs to accept that the model hasn't improved before terminating training. Default: 12")
+parser.add_argument("--patience", type=int, default=4, help="The number of epochs to accept that the model hasn't improved before lowering the learning rate by a factor '--lr_gamma'. Default: 4")
+parser.add_argument("--early_stop_patience", type=int, default=12, help="The number of epochs to accept that the model hasn't improved before terminating training. Default: 12")
 parser.add_argument("--backbone_freeze_layers", type=int, default=0, help="The number of layers in the backbone to freeze when training. Available [0,1,2,3,4,5]. Default: 0")
 parser.add_argument("--dice_loss_weight", type=int, default=10, help="The weighting for the dice loss in the loss function. Default: 10")
 parser.add_argument("--mask_loss_weight", type=int, default=10, help="The weighting for the mask loss in the loss function. Default: 10")
@@ -129,7 +129,7 @@ parser.add_argument("--debugging", type=str2bool, default=False, help="Whether o
 FLAGS = parser.parse_args()
 FLAGS = changeFLAGS(FLAGS)
 
-    
+
 # Setup functions
 too_few_gpus_str, gpus_used_string, available_mem_info = assign_free_gpus(max_gpus=FLAGS.num_gpus)  # Assigning the running script to the selected amount of GPU's with the largest memory available
 if "vitrolife" in FLAGS.dataset_name.lower():                                           # If we want to work with the Vitrolife dataset ...
@@ -148,6 +148,11 @@ FLAGS.epoch_iter = int(np.floor(np.divide(FLAGS.num_train_files, FLAGS.batch_siz
 FLAGS.num_classes = len(MetadataCatalog[cfg.DATASETS.TRAIN[0]].thing_classes)           # Get the number of classes in the current dataset
 FLAGS.available_mem_info = available_mem_info.tolist()                                  # Save the information of available GPU memory in the FLAGS variable
 cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                                      # Set the final values for the config
+
+# Change FLAGS num trials and epochs if on my local computer
+if "nico" in cfg.OUTPUT_DIR.lower():
+    FLAGS.num_trials = 2
+    FLAGS.num_epochs = 2
 
 
 # Create the log file

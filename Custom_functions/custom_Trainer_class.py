@@ -184,7 +184,7 @@ class My_GoTo_Trainer(DefaultTrainer):
         dataset_used = cfg.DATASETS.TRAIN[0]                                        # Get the current dataset
         if "val" in dataset_used: cfg.TEST.PRECISE_BN.ENABLED = False               # If we are in validation, precise_bn is disabled
         num_files = MetadataCatalog[dataset_used].num_files_in_dataset              # Read the number of files of the used dataset
-        precise_bn_period = int(num_files/2) if num_files < 51 else 25              # Every 25 iteration the PreciseBN will be calculated
+        precise_bn_period = int(num_files/2) if num_files < 35 else 20              # Every 25 iteration the PreciseBN will be calculated
 
 
         ret = [

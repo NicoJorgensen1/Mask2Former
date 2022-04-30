@@ -28,7 +28,7 @@ def run_train_func(cfg):
 def launch_custom_training(FLAGS, config, dataset, epoch=0, run_mode="train", hyperparameter_opt=False, quit_training=False):
     # try:
         FLAGS.epoch_iter = int(np.floor(np.divide(FLAGS.num_train_files, FLAGS.batch_size)))                    # Compute the number of iterations per training epoch with the given batch size
-        config.SOLVER.MAX_ITER = FLAGS.epoch_iter * (7 if all(["train" in run_mode, hyperparameter_opt==False, "vitrolife" in FLAGS.dataset_name.lower()]) else 1)  # Increase training iteration count for precise BN computations
+        config.SOLVER.MAX_ITER = FLAGS.epoch_iter * (6 if all(["train" in run_mode, hyperparameter_opt==False, "vitrolife" in FLAGS.dataset_name.lower()]) else 1)  # Increase training iteration count for precise BN computations
         if all(["train" in run_mode, hyperparameter_opt==True]):
             if "vitrolife" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 2)    # ... Transformer and ResNet backbones need a ...
             elif "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 1/10)  # ... few thousand samples to accomplish anything
@@ -125,11 +125,12 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     new_best = np.inf if train_mode=="min" else -np.inf                                                     # Initiate the original "best_value" as either infinity or -infinity according to train_mode
     best_epoch = 0                                                                                          # Initiate the best epoch as being epoch_0, i.e. before doing any model training
     train_dataset = cfg.DATASETS.TRAIN                                                                      # Get the training dataset name
-    val_dataset = train_dataset # cfg.DATASETS.TEST                                                                         # Get the validation dataset name
+    val_dataset = cfg.DATASETS.TEST                                                                         # Get the validation dataset name
     lr_update_check = np.zeros((FLAGS.patience, 1), dtype=bool)                                             # Preallocating validation array to determine whether or not the learning rate was updated
     quit_training = False                                                                                   # Boolean value determining whether or not to commit early stopping
     epochs_to_run = 1 if hyperparameter_optimization else FLAGS.num_epochs                                  # We'll run only 1 epoch if we are performing HPO
     train_start_time = time()                                                                               # Now the training starts
+    epoch_next_display = FLAGS.display_rate - 1                                                             # The next epoch where the images must be visualized 
 
     # Change the FLAGS and config parameters and perform either hyperparameter optimization, use the best found parameters or simply just train
     config, FLAGS = get_HPO_params(config=cfg, FLAGS=FLAGS, trial=trial, hpt_opt=hyperparameter_optimization)
@@ -167,13 +168,16 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                 if epoch+1 >= FLAGS.early_stop_patience:                                                    # If the model has trained for more than 'early_stopping_patience' epochs ...
                     quit_training = early_stopping(history=history, FLAGS=FLAGS)                            # ... perform the early stopping callback
             earlier_HPO_best = deepcopy(FLAGS.HPO_best_metric)                                              # Read the earlier best HPO value 
+            earlier_train_best = deepcopy(new_best)                                                         # Read the earlier best train value 
             new_best, best_epoch = updateLogsFunc(log_file=logs, FLAGS=FLAGS, history=history, best_val=new_best,
                     train_start=train_start_time, epoch_start=epoch_start_time, best_epoch=best_epoch,
                     cur_epoch=FLAGS.HPO_current_trial if hyperparameter_optimization else epoch)
-            HPO_visualize = True if True or all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 30]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 40]) else False
-            if all([np.mod(np.add(epoch,1), FLAGS.display_rate) == 0, hyperparameter_optimization==False]) or all([hyperparameter_optimization, HPO_visualize]): # Every 'display_rate' epochs ...
+            HPO_visualize = True if all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 20]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 45]) else False
+            train_visualize = True if epoch==epoch_next_display or all([new_best <= earlier_train_best, "loss" in FLAGS.eval_metric, new_best <= 20]) or all([new_best >= earlier_train_best, "loss" not in FLAGS.eval_metric, new_best >= 45]) else False 
+            if all([train_visualize, hyperparameter_optimization==False]) or all([hyperparameter_optimization, HPO_visualize]): # At least every 'display_rate' epochs or if the model has improved ...
                 _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
-            if all([quit_training,  hyperparameter_optimization==False]):                                   # If the early stopping callback says we need to quit the training ...
+                epoch_next_display = epoch + FLAGS.display_rate                                             # Increase the counter for when the images must be displayed again
+            if all([quit_training, hyperparameter_optimization==False]):                                    # If the early stopping callback says we need to quit the training ...
                 printAndLog(input_to_write="Committing early stopping at epoch {:d}. The best {:s} is {:.3f} from epoch {:d}".format(epoch+1, FLAGS.eval_metric, new_best, best_epoch), logs=logs)
                 break                                                                                       # break the for loop and stop running more epochs
         except Exception as ex:
