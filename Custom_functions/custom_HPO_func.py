@@ -6,7 +6,7 @@ import gc as garb_collect                                                       
 from time import time                                                                               # Used for timing the trials 
 from copy import deepcopy                                                                           # Used for creating a new copy of a variable to memory
 from sys import path as sys_PATH                                                                    # Import the PATH variable
-from custom_mask2former_setup_func import setup_func, save_dictionary                               # Import the setup function and function to save dictionary 
+from custom_mask2former_setup_func import setup_func, save_dictionary, write_config_to_file         # Import the setup function, a function to save dictionary and a function to save config 
 from custom_print_and_log_func import printAndLog                                                   # Function to log the results 
 from custom_training_func import objective_train_func                                               # The objective training function
 from custom_callback_functions import computeRemainingTime                                          # Function to compute the remaining time of an iterating process 
@@ -72,6 +72,7 @@ FLAGS, cfg, log_file = setup_func()                                             
 Mask2Former_dir = [x for x in sys_PATH if x.endswith("Mask2Former")][0]                             # Get the path of the MaskFormer directory
 HPO_start = time()                                                                                  # Set the time for the start of the HPO 
 def perform_HPO():                                                                                  # The function that will perform the HPO
+    write_config_to_file(config=cfg)                                                                # Save the config file with the initial parameters used
     trial = None                                                                                    # Initiate the trial as a None variable in order to return it if no HPO is performed
     if FLAGS.hp_optim:                                                                              # If the user chose to perform a HPO, then do so...
         warm_ups = deepcopy(FLAGS.warm_up_epochs)                                                   # Make a deepcopy of the number of warmups
