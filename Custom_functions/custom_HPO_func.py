@@ -72,7 +72,7 @@ FLAGS, cfg, log_file = setup_func()                                             
 Mask2Former_dir = [x for x in sys_PATH if x.endswith("Mask2Former")][0]                             # Get the path of the MaskFormer directory
 HPO_start = time()                                                                                  # Set the time for the start of the HPO 
 def perform_HPO():                                                                                  # The function that will perform the HPO
-    write_config_to_file(config=cfg)                                                                # Save the config file with the initial parameters used
+    write_config_to_file(config=cfg)                                                                # Save the config file with the initial parameters used before doing any HPO or training 
     trial = None                                                                                    # Initiate the trial as a None variable in order to return it if no HPO is performed
     if FLAGS.hp_optim:                                                                              # If the user chose to perform a HPO, then do so...
         warm_ups = deepcopy(FLAGS.warm_up_epochs)                                                   # Make a deepcopy of the number of warmups

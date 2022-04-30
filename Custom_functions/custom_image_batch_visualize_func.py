@@ -98,8 +98,6 @@ def draw_mask_image(mask_list, lbl_list, meta_data):
         x1, y1 = np.amin(bbox_coordinates, axis=1)                                          # Extract the minimum x and y white pixel values
         x2, y2 = np.amax(bbox_coordinates, axis=1)                                          # Extract the maximum x and y white pixel values
         final_im = cv2.rectangle(final_im, (y1,x1), (y2,x2),col, 2)                         # Overlay the bounding box for the current object on the current image 
-    #     (txt_w, txt_h), txt_base = cv2.getTextSize(class_name, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=2)
-    #     final_im = cv2.putText(img=final_im, text=class_name, org=(x1+txt_w-txt_base,y1+txt_h-txt_base), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=col, thickness=2, lineType=cv2.LINE_AA, bottomLeftOrigin=False)
     # plt.imshow(final_im)
     # plt.show(block=False)
     return final_im                                                                         # Return the final image 
