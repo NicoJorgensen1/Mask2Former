@@ -113,12 +113,12 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             dataset_dicts = vitrolife_dataset_function(data_split, debugging=True)          # ... the list of dataset_dicts from vitrolife is computed.
             dataset_dicts = dataset_dicts[:FLAGS.num_images]                                # We'll maximally show the first FLAGS.num_images images
         else: dataset_dicts = DatasetCatalog.get("ade20k_sem_seg_{:s}".format(data_split))  # Else we use the ADE20K dataset
-        if "train" in data_split:                                                           # If we are on the training split ...
-            augmentations = []                                                              # ... the augmentations will be the training augmentations 
-        else:                                                                               # Else, if we are on the validation or test split ...
-            augmentations = []                                                              # ... we will use no type of augmentations 
-        data_mapper = MaskFormerInstanceDatasetMapper(cfg=config, is_train=True, augmentations=augmentations)   # Use the standard instance segmentation mapper 
-        data_mapper = custom_mapper(config=config, is_train="train" in data_split)          # Using my own custom data mapper 
+        # if "train" in data_split:                                                           # If we are on the training split ...
+        #     augmentations = []                                                              # ... the augmentations will be the training augmentations 
+        # else:                                                                               # Else, if we are on the validation or test split ...
+        #     augmentations = []                                                              # ... we will use no type of augmentations 
+        # data_mapper = MaskFormerInstanceDatasetMapper(cfg=config, is_train=True, augmentations=augmentations)   # Use the standard instance segmentation mapper 
+        data_mapper = custom_mapper(config=config, is_train="train" in data_split)          # Using my own custom data mapper, only use data augmentation on training dataset 
         dataloader = build_detection_train_loader(dataset_dicts, mapper=data_mapper, total_batch_size=np.min([FLAGS.num_images, len(dataset_dicts)]))   # Create the dataloader
         data_batch = next(iter(dataloader))                                                 # Extract the next batch from the dataloader
     dataset_name = config.DATASETS.TRAIN[0] if "train" in data_split else config.DATASETS.TEST[0]   # Extract the dataset name 
