@@ -97,7 +97,7 @@ parser.add_argument("--optimizer_used", type=str, default="ADAMW", help="Optimiz
 parser.add_argument("--num_workers", type=int, default=6, help="Number of workers to use for training the model. Default: 4")
 parser.add_argument("--max_iter", type=int, default=int(1e5), help="Maximum number of iterations to train the model for. <<Deprecated argument. Use 'num_epochs' instead>>. Default: 100000")
 parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of the feature extracting ResNet backbone. Possible values: [18,34,50,101] Default: 101")
-parser.add_argument("--num_queries", type=int, default=100, help="The number of queries used for training. Default: 100")
+parser.add_argument("--num_queries", type=int, default=75, help="The number of queries used for training. Default: 100")
 parser.add_argument("--batch_size", type=int, default=1, help="The batch size used for training the model. Default: 1")
 parser.add_argument("--num_images", type=int, default=6, help="The number of images to display/segment. Default: 6")
 parser.add_argument("--num_trials", type=int, default=2, help="The number of trials to run HPO for. Only relevant if '--hp_optim==True'. Default: 300")
@@ -122,14 +122,14 @@ parser.add_argument("--ignore_background", type=str2bool, default=False, help="W
 parser.add_argument("--crop_enabled", type=str2bool, default=False, help="Whether or not cropping is allowed on the images. Default: False")
 parser.add_argument("--hp_optim", type=str2bool, default=True, help="Whether or not we are initiating the training with a hyperparameter optimization. Default: True")
 parser.add_argument("--inference_only", type=str2bool, default=False, help="<< Currently not supported >> Whether or not training is skipped and only inference is run. This input argument deprecates the '--eval_only' argument. Default: False")
-parser.add_argument("--display_images", type=str2bool, default=True, help="Whether or not some random sample images are displayed before training starts. Default: False")
+parser.add_argument("--display_images", type=str2bool, default=False, help="Whether or not some random sample images are displayed before training starts. Default: False")
 parser.add_argument("--use_transformer_backbone", type=str2bool, default=True, help="Whether or not we are using the extended swin_small_transformer backbone. Default: True")
 parser.add_argument("--debugging", type=str2bool, default=False, help="Whether or not we are debugging the script. Default: False")
 # Parse the arguments into a Namespace variable
 FLAGS = parser.parse_args()
 FLAGS = changeFLAGS(FLAGS)
 
-
+    
 # Setup functions
 too_few_gpus_str, gpus_used_string, available_mem_info = assign_free_gpus(max_gpus=FLAGS.num_gpus)  # Assigning the running script to the selected amount of GPU's with the largest memory available
 if "vitrolife" in FLAGS.dataset_name.lower():                                           # If we want to work with the Vitrolife dataset ...

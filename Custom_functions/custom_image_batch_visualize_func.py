@@ -3,6 +3,7 @@ import re
 import torch
 import numpy as np
 import cv2
+import matplotlib
 from matplotlib import pyplot as plt
 from tqdm import tqdm                                                                       # Used to set a progress bar
 from copy import deepcopy
@@ -100,6 +101,10 @@ def draw_mask_image(mask_list, lbl_list, meta_data):
         x1, y1 = np.amin(bbox_coordinates, axis=1)                                          # Extract the minimum x and y white pixel values
         x2, y2 = np.amax(bbox_coordinates, axis=1)                                          # Extract the maximum x and y white pixel values
         final_im = cv2.rectangle(final_im, (y1,x1), (y2,x2),col, 2)                         # Overlay the bounding box for the current object on the current image 
+    #     (txt_w, txt_h), txt_base = cv2.getTextSize(class_name, fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=2)
+    #     final_im = cv2.putText(img=final_im, text=class_name, org=(x1+txt_w-txt_base,y1+txt_h-txt_base), fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, color=col, thickness=2, lineType=cv2.LINE_AA, bottomLeftOrigin=False)
+    # plt.imshow(final_im)
+    # plt.show(block=False)
     return final_im                                                                         # Return the final image 
 
 
@@ -136,10 +141,8 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         true_classes = data["instances"].get_fields()["gt_classes"].numpy().tolist()        # Get the true class labels for the instances on the current image
         true_masks = [x.astype(bool) for x in data["instances"].get_fields()["gt_masks"].numpy()]   # Get the true binary masks for the instances on the current image
         y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data)  # Create a mask image for the true masks
-        plt.imshow(y_true)
-        plt.show(block=False)
-
-
+        # plt.imshow(y_true)
+        # plt.show(block=False)
 
         # The predicted image 
         y_pred_dict = predictor.__call__(img)["instances"].get_fields()                     # y_pred_dict is a dict with keys ['pred_masks', 'pred_boxes', 'scores', 'pred_classes']
@@ -148,26 +151,29 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         img_torch = torch.reshape(data["image"], (1,)+tuple(data["image"].shape))           # Reshape the torch-type image into shape [1, C, H, W]
         features = predictor.model.backbone(img_torch.to(predictor.model.device).to(torch.float))   # Compute the image features using the backbone model
         outputs = predictor.model.sem_seg_head(features)                                    # Compute the outputs => a dictionary with keys [pred_logits, pred_masks, aux_outputs].
+
         targets = [{"labels": data["instances"].get_fields()["gt_classes"],                 # The target must be a list of length batch_size containing ...
                     "masks": data["instances"].get_fields()["gt_masks"]}]                   # ... dicts with keys "labels" and "masks" for each image
         matched_output = matcher.forward(outputs=outputs, targets=targets)[0]               # Performs the Hungarian matching and outputs a list of [[idx_mask], [idx_lbl]] ...
         mask_pred_indices = matched_output[0].numpy()
         lbl_pred_indices = matched_output[1].numpy()
         y_pred_masks, y_pred_lbls = list(), list()                                          # Initiate lists to store the predicted masks and predicted labels 
+        test_mask_list, test_lbl_list = list(), list()
         assert pred_masks.shape[0] == FLAGS.num_queries == outputs["pred_masks"].shape[1], "This fucking has to work"
         for mask_pred_idx, lbl_pred_idx in zip(mask_pred_indices, lbl_pred_indices):        # ... where the indices refer to the indices of predicted mask from the outputs dictionary and the predicted class
             y_pred_masks.append(pred_masks[mask_pred_idx].cpu().numpy().astype(bool))       # Append the predicted mask to the list of predicted masks
             y_pred_lbls.append(pred_classes[lbl_pred_idx].cpu().numpy().item())             # Append the predicted class label to the list of predicted labels 
+            # Testing scheme 
+            test_mask_list.append(pred_masks[lbl_pred_idx].cpu().numpy().astype(bool))      # Append the predicted mask to the list of predicted masks
+            test_lbl_list.append(pred_classes[mask_pred_idx].cpu().numpy().item())          # Append the predicted class label to the list of predicted labels 
         y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
-        # try:
-        #     y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data, FLAGS=FLAGS) # Create a mask image for the true masks
-        # except Exception as ex:
-        #     y_pred = deepcopy(img) 
-        #     error_string = "An exception of type {} occured while creating the y_pred image for the {} data split. Arguments:\n{!r}".format(type(ex).__name__, data_split, ex.args)
-        #     printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
+        
+        # Testing scheme 
+        y_testing = draw_mask_image(mask_list=test_mask_list, lbl_list=test_lbl_list, meta_data=meta_data)
+        img_ytrue_ypred["input"].append(y_testing)
         
         # Append the input image, y_true and y_pred to the dictionary
-        img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
+        # img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
         img_ytrue_ypred["y_true"].append(y_true)                                            # Append the ground truth to the dictionary
         img_ytrue_ypred["y_pred"].append(y_pred)                                            # Append the predicted mask to the dictionary
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are visualizing the vitrolife dataset
@@ -193,29 +199,45 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
         data_batches = [None, None, None]                                                   # ... it must be a list of None's...
     data_split_count = 1                                                                    # Initiate the datasplit counter
     fontdict = {'fontsize': 25}                                                             # Set the font size for the plot
+    thing_colors = list(reversed(deepcopy(MetadataCatalog.get(config.DATASETS.TRAIN[0]).thing_colors[:-1]))) # Create a list of the thing colors
+    thing_names = deepcopy(MetadataCatalog.get(config.DATASETS.TRAIN[0]).thing_classes)[:-1] + ["PN{}".format(x) for x in range(1,8)]   # Create a list of the class names used with numbered PNs
+    colors_with_alpha = list()                                                              # Initiate a list of colors with alpha values 
+    for thing_color in thing_colors:                                                        # Iterate over all colors in the thing_colors list
+        t_col = tuple()                                                                     # Create a new tuple value 
+        for col_val in thing_color:                                                         # For each color value item in the current tuple_color
+            t_col += (np.divide(float(col_val),255),)                                       # Squeeze the value from [0, 255] to [0, 1] and append it to the earlier new tuple
+        colors_with_alpha.append(t_col + (float(1),))                                       # When all colors have been added to the new tuple, the alpha value of 1 gets added as well
+    thing_color_cmap = matplotlib.colors.LinearSegmentedColormap.from_list("Thing colors cmap", colors_with_alpha, len(colors_with_alpha))  # Convert the list of colors into a pyplot colormap
+    boundaries = np.linspace(0, len(colors_with_alpha), len(colors_with_alpha)+1)           # Create the boundaries for the colormap
+    norm = matplotlib.colors.BoundaryNorm(boundaries, len(colors_with_alpha))               # Convert it into some kind of boundary normalization, used for discretizing the colormap
     for data_split, data_batch in tqdm(zip(["train", "val", "test"], data_batches),         # Iterate through the three splits available
                 unit="Data_split", ascii=True, desc="Dataset split {:d}/{:d}".format(data_split_count, 3),
                 bar_format="{desc}  | {percentage:3.0f}% | {bar:35}| {n_fmt}/{total_fmt} [Spent: {elapsed}. Remaining: {remaining}{postfix}]"):      
-        data_split_count += 1
+        data_split_count += 1                                                               # Increase the datasplit counter for the progress bar 
         if "vitrolife" not in FLAGS.dataset_name.lower() and data_split=="test": continue   # Only vitrolife has a test dataset. ADE20K doesn't. 
         # Extract information about the dataset used
         img_ytrue_ypred, data_batch, FLAGS, config = create_batch_img_ytrue_ypred(config=config, data_split=data_split, # Create the batch of images that needs to be visualized ...
             FLAGS=FLAGS, data_batch=data_batch, model_done_training=model_done_training, device=device) # ... and return the images in the data_batch dictionary
+        class_names = list(reversed(thing_names))
+        # max_PN_num = np.max(img_ytrue_ypred["PN"])
+        # max_PN_num = 0
+        # if max_PN_num > 0:
+        #     class_names = thing_names[:np.where(["PN{}".format(max_PN_num) in x for x in thing_names])[0][0]+1]
+        # else: class_names = thing_names[:np.where(["PN" in x for x in thing_names])[0][0]]  # Set class names if no PNs are present 
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are working on the vitrolife dataset sort the ...
             data_batch = sorted(data_batch, key=lambda x: x["image_custom_info"]["PN_image"])   # ... data_batch after the number of PN per found image
             img_ytrue_ypred = sort_dictionary_by_PN(data=img_ytrue_ypred)                   # And then also sort the data dictionary
         num_rows, num_cols = 3, len(data_batch)                                             # The figure will have three rows (input, y_pred, y_true) and one column per image
-        fig = plt.figure(figsize=(int(np.ceil(len(data_batch)*4)), 12))                     # Create the figure object
+        fig, axes = plt.subplots(nrows=num_rows, ncols=num_cols, figsize=(int(np.ceil(len(data_batch)*4)), 12))
         row = 0                                                                             # Initiate the row index counter (all manual indexing could have been avoided by having created img_ytrue_ypred as an OrderedDict)
         for key in img_ytrue_ypred.keys():                                                  # Loop through all the keys in the batch dictionary
             if key.lower() not in ['input', 'y_true', 'y_pred']: continue                   # If the key is not one of (input, y_pred, y_true), we simply skip to the next one
             for col, img in enumerate(img_ytrue_ypred[key]):                                # Loop through all available images in the dictionary
-                plt.subplot(num_rows, num_cols, row*num_cols+col+1)                         # Create the subplot instance
-                plt.axis("off")                                                             # Remove axis tickers
                 if "vitrolife" in FLAGS.dataset_name.lower():                               # If we are visualizing the vitrolife dataset
-                    plt.title("{:s} with {:.0f} PN".format(key, img_ytrue_ypred["PN"][col]), fontdict=fontdict) # Create the title for the plot with the number of PN
-                else: plt.title("{:s}".format(key), fontdict=fontdict)                      # Otherwise simply put the key, i.e. either input, y_pred or y_true.
-                plt.imshow(img, cmap="gray")                                                # Display the image
+                    axes[row,col].set_title("{:s} with {:.0f} PN".format(key, img_ytrue_ypred["PN"][col]), fontdict=fontdict)   # Create the title for the plot with the number of PN
+                else: axes[row,col].set_title("{:s}".format(key), fontdict=fontdict)        # If on ADE20K, then the title is simply the key value
+                axes[row,col].imshow(img, cmap="gray")                                      # Display the image 
+                axes[row,col].set_axis_off()                                                # Remove axes xticks and yticks 
             row += 1                                                                        # Increase the row counter by 1
         try: fig = move_figure_position(fig=fig, position=position)                         # Try and move the figure to the wanted position (only possible on home computer with a display)
         except: pass                                                                        # Except, simply just let the figure retain the current position
@@ -223,6 +245,10 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
         if epoch_num is not None: fig_name = "{:s}epoch_{:d}.jpg".format(fig_name_init, epoch_num)                      # If an epoch number has been specified, the figure name will contain that
         else: fig_name = "{:s}{:s}_training.jpg".format(fig_name_init, "after" if model_done_training else "before")    # Otherwise the visualization happens before/after training
         fig.tight_layout()                                                                  # Assures the subplots are plotted tight around each other
+        cbar = fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm, cmap=thing_color_cmap), # Create a colorbar ... 
+                ax=axes.ravel().tolist(), orientation='vertical')                           # ... shared by all axes
+        cbar.set_ticks(np.add(np.arange(0,len(class_names),1), 0.5))                        # Set the ticks in the middle of the discretized area
+        cbar.set_ticklabels(class_names)                                                    # Let the ticklabels be the class names of the current color 
         fig.savefig(os.path.join(get_save_dirs(config=config, dataset_split=data_split), fig_name), bbox_inches="tight")    # Save the figure in the correct output directory
         fig_list.append(fig)                                                                # Append the current figure to the list of figures
         data_batches_final.append(data_batch)                                               # Append the current data_batch to the list of data_batches
