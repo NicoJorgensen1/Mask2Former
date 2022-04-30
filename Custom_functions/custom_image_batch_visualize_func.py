@@ -164,7 +164,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             test_lbl_list.append(pred_classes[mask_pred_idx].cpu().numpy().item())          # Append the predicted class label to the list of predicted labels 
         y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
         
-        # Testing scheme 
+        ########### Testing scheme  ###########
         y_testing = draw_mask_image(mask_list=test_mask_list, lbl_list=test_lbl_list, meta_data=meta_data)
         img_ytrue_ypred["input"].append(y_testing)
         
@@ -174,7 +174,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         img_ytrue_ypred["y_pred"].append(y_pred)                                            # Append the predicted mask to the dictionary
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are visualizing the vitrolife dataset
             img_ytrue_ypred["PN"].append(int(data["image_custom_info"]["PN_image"]))        # Read the true number of PN on the current image
-    del matcher, predictor, data_mapper
+    del matcher, predictor
     return img_ytrue_ypred, data_batch, FLAGS, config
 
 

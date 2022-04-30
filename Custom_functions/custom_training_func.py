@@ -192,10 +192,11 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
         history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_test_results["segm"], data_split="test")
         for key in history_test.keys():                                                                     # Iterate over all the keys in the history dictionary
             if "test" in key: test_history[key] = history_test[key][-1]                                     # If "test" is in the key, assign the value to the test_dictionary 
-        save_dictionary(dictObject=history_test, save_folder=config.OUTPUT_DIR, dictName="test_history")    # Save the test results in a dictionary 
+        save_dictionary(dictObject=test_history, save_folder=config.OUTPUT_DIR, dictName="test_history")    # Save the test results in a dictionary 
+        for dict_key in ["precision", "scores", "recall"]:                                                  # Iterate over the three, long keys in the test dictionary ...
+            del test_history["test_" + dict_key]                                                            # ... and delete them all after having saved the dictionary to a local file 
 
     # Return the results
     if hyperparameter_optimization: return new_best
     else: return history, test_history, new_best, best_epoch, config
     
-

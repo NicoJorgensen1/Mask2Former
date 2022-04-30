@@ -37,7 +37,7 @@ def custom_augmentation_mapper(config, is_train=True):
             T.RandomFlip(prob=0.25, horizontal=False, vertical=True),       # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomLighting  
             T.RandomCrop("relative", (0.75, 0.75)),                         # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomCrop
             T.Resize((500,500), Image.BILINEAR)]                            # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.Resize
-    custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=is_train, augmentations=transform_list)    # Create the mapping from data dictionary to augmented training image
+    custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=True, augmentations=transform_list)    # Create the mapping from data dictionary to augmented training image
     # Something has to be done to the bounding boxes before this mapper can be used ... 
     return custom_mapper
 
