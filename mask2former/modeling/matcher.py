@@ -147,6 +147,10 @@ class HungarianMatcher(nn.Module):
             )
             C = C.reshape(num_queries, -1).cpu()
             indices.append(linear_sum_assignment(C))
+        self._cost_matrix = C                                                                       # Assign the final cost matrix to the matcher instance 
+        self._mask_loss = cost_mask
+        self._dice_loss = cost_dice
+        self._class_loss = cost_class
 
         return [(torch.as_tensor(i, dtype=torch.int64), torch.as_tensor(j, dtype=torch.int64)) for i, j in indices]
 

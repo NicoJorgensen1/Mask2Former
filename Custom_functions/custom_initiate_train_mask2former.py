@@ -22,6 +22,7 @@ if not os.path.isdir(dataset_dir): dataset_dir = os.path.join("/mnt", "home_shar
 assert os.path.isdir(dataset_dir), "The dataset directory doesn't exist in the chosen location"
 os.environ["DETECTRON2_DATASETS"] = dataset_dir
 
+
 # Import important libraries
 # import tracemalloc
 # tracemalloc.start()

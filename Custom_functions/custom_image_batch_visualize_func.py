@@ -105,17 +105,14 @@ def draw_mask_image(mask_list, lbl_list, meta_data):
 
 # Define a function to predict some label-masks for the dataset
 def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False, device="cpu"):
-    if model_done_training==False: config = putModelWeights(config)                         # Change the config and append the latest model as the used checkpoint, if the model is still training
+    if model_done_training==False:                                                          # If the model hasn't finished training ...
+        config = putModelWeights(config)                                                    # ... change the config and append the latest model as the used checkpoint, if the model is still training
     if data_batch is None:                                                                  # If no batch with data was send to the function ...
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # ... and if we are using the vitrolife dataset
             dataset_dicts = vitrolife_dataset_function(data_split, debugging=True)          # ... the list of dataset_dicts from vitrolife is computed.
             dataset_dicts = dataset_dicts[:FLAGS.num_images]                                # We'll maximally show the first FLAGS.num_images images
-        else: dataset_dicts = DatasetCatalog.get("ade20k_sem_seg_{:s}".format(data_split))  # Else we use the ADE20K dataset
-        # if "train" in data_split:                                                           # If we are on the training split ...
-        #     augmentations = []                                                              # ... the augmentations will be the training augmentations 
-        # else:                                                                               # Else, if we are on the validation or test split ...
-        #     augmentations = []                                                              # ... we will use no type of augmentations 
-        # data_mapper = MaskFormerInstanceDatasetMapper(cfg=config, is_train=True, augmentations=augmentations)   # Use the standard instance segmentation mapper 
+        else:                                                                               # Else ...
+            dataset_dicts = DatasetCatalog.get("ade20k_sem_seg_{:s}".format(data_split))    # ... we use the ADE20K dataset
         data_mapper = custom_mapper(config=config, is_train="train" in data_split)          # Using my own custom data mapper, only use data augmentation on training dataset 
         dataloader = build_detection_train_loader(dataset_dicts, mapper=data_mapper, total_batch_size=np.min([FLAGS.num_images, len(dataset_dicts)]))   # Create the dataloader
         data_batch = next(iter(dataloader))                                                 # Extract the next batch from the dataloader
@@ -129,6 +126,10 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
     predictor = DefaultPredictor(config_prediction)                                         # Create an instance of the DefaultPredictor with the changed config 
     matcher = HungarianMatcher(cost_class=FLAGS.class_loss_weight, cost_dice=FLAGS.dice_loss_weight,    # Create an instance of the ...
             cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)     # ... Hungarian Matcher class
+    
+
+
+
     img_ytrue_ypred = {"input": list(), "y_pred": list(), "y_true": list(), "PN": list()}   # Initiate a dictionary to store the input images, ground truth masks and the predicted masks
     for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloade
         img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Make input image numpy format and [H,W,C]
@@ -143,33 +144,22 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         # The predicted image 
         y_pred_dict = predictor.__call__(img)["instances"].get_fields()                     # y_pred_dict is a dict with keys ['pred_masks', 'pred_boxes', 'scores', 'pred_classes']
         pred_masks = y_pred_dict["pred_masks"]                                              # pred_masks is a tensor of shape [100, H, W] of float values
-        pred_classes = y_pred_dict["pred_classes"]                                          # pred_classes is a tensor of shape [100] only containing integer class_id's
+        pred_classes = y_pred_dict["pred_classes"]                                          # pred_classes is a tensor of shape [100] only containing integer class_id's. This is only used for inference, not when we have true labels
         img_torch = torch.reshape(data["image"], (1,)+tuple(data["image"].shape))           # Reshape the torch-type image into shape [1, C, H, W]
         features = predictor.model.backbone(img_torch.to(predictor.model.device).to(torch.float))   # Compute the image features using the backbone model
         outputs = predictor.model.sem_seg_head(features)                                    # Compute the outputs => a dictionary with keys [pred_logits, pred_masks, aux_outputs].
-
         targets = [{"labels": data["instances"].get_fields()["gt_classes"],                 # The target must be a list of length batch_size containing ...
                     "masks": data["instances"].get_fields()["gt_masks"]}]                   # ... dicts with keys "labels" and "masks" for each image
-        matched_output = matcher.forward(outputs=outputs, targets=targets)[0]               # Performs the Hungarian matching and outputs a list of [[idx_mask], [idx_lbl]] ...
-        mask_pred_indices = matched_output[0].numpy()
-        lbl_pred_indices = matched_output[1].numpy()
-        y_pred_masks, y_pred_lbls = list(), list()                                          # Initiate lists to store the predicted masks and predicted labels 
-        test_mask_list, test_lbl_list = list(), list()
+        matched_output = matcher.forward(outputs=outputs, targets=targets)[0]               # Performs the Hungarian matching and outputs a list of [[idx_row], [idx_col]] ...
+        row_pred_indices = matched_output[0].numpy()                                        # This is the row_idx of the matching, i.e. the index of the "chosen" predicted mask and lbl
+        col_pred_indices = matched_output[1].numpy()                                        # This is the col_idx of the matching, i.e. the index of the "chosen" true instance label idx
         assert pred_masks.shape[0] == FLAGS.num_queries == outputs["pred_masks"].shape[1], "This fucking has to work"
-        for mask_pred_idx, lbl_pred_idx in zip(mask_pred_indices, lbl_pred_indices):        # ... where the indices refer to the indices of predicted mask from the outputs dictionary and the predicted class
-            y_pred_masks.append(pred_masks[mask_pred_idx].cpu().numpy().astype(bool))       # Append the predicted mask to the list of predicted masks
-            y_pred_lbls.append(pred_classes[lbl_pred_idx].cpu().numpy().item())             # Append the predicted class label to the list of predicted labels 
-            # Testing scheme 
-            test_mask_list.append(pred_masks[lbl_pred_idx].cpu().numpy().astype(bool))      # Append the predicted mask to the list of predicted masks
-            test_lbl_list.append(pred_classes[mask_pred_idx].cpu().numpy().item())          # Append the predicted class label to the list of predicted labels 
+        y_pred_masks = [x for x in pred_masks[row_pred_indices].numpy().astype(bool)]       # This is the matced predicted masks
+        y_pred_lbls = np.asarray(true_classes)[col_pred_indices].tolist()                   # This is the matched predicted class labels for each of the predicted masks
         y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
         
-        ########### Testing scheme  ###########
-        y_testing = draw_mask_image(mask_list=test_mask_list, lbl_list=test_lbl_list, meta_data=meta_data)
-        img_ytrue_ypred["input"].append(y_testing)
-        
         # Append the input image, y_true and y_pred to the dictionary
-        # img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
+        img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
         img_ytrue_ypred["y_true"].append(y_true)                                            # Append the ground truth to the dictionary
         img_ytrue_ypred["y_pred"].append(y_pred)                                            # Append the predicted mask to the dictionary
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are visualizing the vitrolife dataset
