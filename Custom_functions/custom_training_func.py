@@ -64,7 +64,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
         # Set limits on the possible HPO values 
         batch_size_max = 1
         if FLAGS.use_transformer_backbone==True:
-            batch_size_max = np.max([1, int(np.floor(np.min(FLAGS.available_mem_info)/15000))]) #* FLAGS.num_gpus
+            batch_size_max = np.max([1, int(np.floor(np.min(FLAGS.available_mem_info)/15000))]) * FLAGS.num_gpus
         else: batch_size_max = int(np.ceil(np.min(FLAGS.available_mem_info)/1500))
         
         # Change the FLAGS parameters and then change the config
@@ -80,7 +80,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
         if "vitrolife" in FLAGS.dataset_name:
             FLAGS.num_queries = trial.suggest_int(name="num_queries", low=15, high=150) 
         if FLAGS.use_transformer_backbone==False:
-            FLAGS.resnet_depth = 50# trial.suggest_categorical(name="resnet_depth", choices=[50, 101])
+            FLAGS.resnet_depth = trial.suggest_categorical(name="resnet_depth", choices=[50, 101])
             FLAGS.backbone_freeze_layers = trial.suggest_int(name="backbone_freeze", low=0, high=5)
         del config 
         config = createVitrolifeConfiguration(FLAGS=FLAGS)
