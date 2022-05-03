@@ -94,7 +94,7 @@ parser.add_argument("--dataset_name", type=str, default="vitrolife", help="Which
 parser.add_argument("--output_dir_postfix", type=str, default=start_time, help="Filename extension to add to the output directory of the current process. Default: now: 'HH_MM_DDMMMYYYY'")
 parser.add_argument("--eval_metric", type=str, default="val_AP", help="Metric to use in order to determine the 'best' model weights. Default: val_AP")
 parser.add_argument("--optimizer_used", type=str, default="ADAMW", help="Optimizer to use. Available [SGD, ADAMW]. Default: ADAMW")
-parser.add_argument("--num_workers", type=int, default=6, help="Number of workers to use for training the model. Default: 4")
+parser.add_argument("--num_workers", type=int, default=1, help="Number of workers to use for. Default: 2")
 parser.add_argument("--max_iter", type=int, default=int(1e5), help="Maximum number of iterations to train the model for. <<Deprecated argument. Use 'num_epochs' instead>>. Default: 100000")
 parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of the feature extracting ResNet backbone. Possible values: [18,34,50,101] Default: 101")
 parser.add_argument("--num_queries", type=int, default=75, help="The number of queries used for training. Default: 100")

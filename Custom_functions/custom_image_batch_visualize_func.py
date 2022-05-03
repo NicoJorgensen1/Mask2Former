@@ -114,7 +114,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         else:                                                                               # Else ...
             dataset_dicts = DatasetCatalog.get("ade20k_sem_seg_{:s}".format(data_split))    # ... we use the ADE20K dataset
         data_mapper = custom_mapper(config=config, is_train="train" in data_split)          # Using my own custom data mapper, only use data augmentation on training dataset 
-        dataloader = build_detection_train_loader(dataset_dicts, mapper=data_mapper, total_batch_size=np.min([FLAGS.num_images, len(dataset_dicts)]))   # Create the dataloader
+        dataloader = build_detection_train_loader(dataset_dicts, mapper=data_mapper, total_batch_size=np.min([FLAGS.num_images, len(dataset_dicts)]), num_workers=1)   # Create the dataloader
         data_batch = next(iter(dataloader))                                                 # Extract the next batch from the dataloader
     dataset_name = config.DATASETS.TRAIN[0] if "train" in data_split else config.DATASETS.TEST[0]   # Extract the dataset name 
     meta_data = MetadataCatalog.get(dataset_name)                                           # Read the metadata for the current image 

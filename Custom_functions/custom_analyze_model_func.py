@@ -34,7 +34,7 @@ def setup(args, config):
 
 
 def do_flop(cfg, args):
-    data_loader = build_detection_test_loader(cfg, cfg.DATASETS.TEST[0])
+    data_loader = build_detection_test_loader(cfg, cfg.DATASETS.TEST[0], num_workers=1)
     model = build_model(cfg)
     DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
     model.eval()
@@ -64,7 +64,7 @@ def do_flop(cfg, args):
 
 
 def do_activation(cfg, args):
-    data_loader = build_detection_test_loader(cfg, cfg.DATASETS.TEST[0])
+    data_loader = build_detection_test_loader(cfg, cfg.DATASETS.TEST[0], num_workers=1)
     model = build_model(cfg)
     DetectionCheckpointer(model).load(cfg.MODEL.WEIGHTS)
     model.eval()
