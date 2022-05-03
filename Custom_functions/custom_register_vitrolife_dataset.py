@@ -13,7 +13,8 @@ from detectron2.structures import BoxMode
 from detectron2.utils.visualizer import Visualizer
 
 # Create dictionary to store the class names and IDs 
-class_labels = {kk: val for kk,val in enumerate(["Well", "Zona", "Perivitelline space", "Cell", "PN"])}
+# class_labels = {kk: val for kk,val in enumerate(["Well", "Zona", "Perivitelline space", "Cell", "PN"])}
+class_labels = {kk: val for kk, val in enumerate(["PN"])}
 
 # Function to select sample dictionaries with unique PN's
 def pickSamplesWithUniquePN(dataset_dict):
@@ -128,8 +129,10 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
 
 # Function to register the dataset and the meta dataset for each of the three splitshuffleshuffles, [train, val, test]
 def register_vitrolife_data_and_metadata_func(debugging=False):
-    thing_colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0),                                   # Set random colors for the Well, Zona, PV Space and Cell classes
-        (185,220,255), (255,185,220), (220,255,185), (185,255,0), (0,185,220), (220,0,185), (115,45,115), (45,115,45)]  # Set similar colors for the PN classes
+    # thing_colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0),                                   # Set random colors for the Well, Zona, PV Space and Cell classes
+    #     (185,220,255), (255,185,220), (220,255,185), (185,255,0), (0,185,220), (220,0,185), (115,45,115), (45,115,45)]  # Set similar colors for the PN classes
+    thing_colors = [(185,220,255), (255,185,220), (220,255,185), (185,255,0),                       # Set colors for the ...
+                    (0,185,220), (220,0,185), (115,45,115), (45,115,45)]                            # ... different numbers of PNs 
     thing_id = {kk: key for kk,key in enumerate(list(class_labels.keys()))}                         # Get a dictionary of continuous keys
     for split_mode in ["train", "val", "test"]:                                                     # Iterate over the three dataset splits ... 
         DatasetCatalog.register("vitrolife_dataset_{:s}".format(split_mode), lambda split_mode=split_mode: vitrolife_dataset_function(run_mode=split_mode, debugging=debugging))    # Register the dataset
