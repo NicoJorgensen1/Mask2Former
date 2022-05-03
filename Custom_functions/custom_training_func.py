@@ -64,7 +64,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
         # Set limits on the possible HPO values 
         batch_size_max = 1
         if FLAGS.use_transformer_backbone==True:
-            batch_size_max = np.max([1, int(np.floor(np.min(FLAGS.available_mem_info)/15000))]) * FLAGS.num_gpus
+            batch_size_max = np.max([1, int(np.floor(np.min(FLAGS.available_mem_info)/15000))]) #* FLAGS.num_gpus
         else: batch_size_max = int(np.ceil(np.min(FLAGS.available_mem_info)/1500))
         
         # Change the FLAGS parameters and then change the config
