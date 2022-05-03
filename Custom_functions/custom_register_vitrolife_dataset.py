@@ -13,7 +13,7 @@ from detectron2.structures import BoxMode
 from detectron2.utils.visualizer import Visualizer
 
 # Create dictionary to store the class names and IDs 
-# class_labels = {kk: val for kk,val in enumerate(["Well", "Zona", "Perivitelline space", "Cell", "PN"])}
+class_labels = {kk: val for kk,val in enumerate(["Well", "Zona", "Perivitelline space", "Cell", "PN"])}
 class_labels = {kk: val for kk, val in enumerate(["PN"])}
 
 # Function to select sample dictionaries with unique PN's
@@ -27,6 +27,11 @@ def pickSamplesWithUniquePN(dataset_dict):
             data_used.append(data)                                                                  # ... and the data_used array is appended with the current sample
     data_used = sorted(data_used, key=lambda x: x["image_custom_info"]["PN_image"])                 # Sort the data_used list by the number of dictionaries
     return data_used
+
+
+# run_mode = "val"
+# debugging = False 
+# visualize = False 
 
 
 # Define the function to return the list of dictionaries with information regarding all images available in the vitrolife dataset
@@ -66,13 +71,16 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
         if visualize:                                                                                                   # If we are debugging and the images must be visualized ...
             orig_im = cv2.imread(os.path.join(vitrolife_dataset_filepath, "raw_images", img_filename)).astype(np.uint8) # Read the original image
             border = np.multiply(np.ones((500, 25, 3)).astype(np.uint8), (150, 0, 255)).astype(np.uint8)                # Create a border between subplots
-        
         # Iterate over all instances in the image
         annotations = list()                                                                        # The annotations must be a list of dictionaries
+        mask = np.zeros_like(annotation_dict_file[list(annotation_dict_file.keys())[0]])            # Initially, the mask will be empty 
         positive_pixels_list = []                                                                   # Initiate a list to store the number of positive pixels in each mask 
         for key in annotation_dict_file.keys():                                                     # Loop through each key (=object/instance) in the current image
+            if "pn" not in key.lower():                                                             # If the current key is not the PN ... 
+                continue                                                                            # ... continue, as only PN's should be "things" classes 
             mask = deepcopy(annotation_dict_file[key])                                              # Get the current mask as the value of the given key 
-            if np.sum(mask) < 2: continue                                                           # We need at least two positive pixels to create a mask with the given instance 
+            if np.sum(mask) < 2:                                                                    # We need at least two positive pixels ...
+                continue                                                                            # ... to create a mask with the given instance 
             mask_pixel_coordinates = np.asarray(np.where(mask))                                     # Get all pixel coordinates for the true pixels in the mask
             x1, y1 = np.amin(mask_pixel_coordinates, axis=1)                                        # Extract the minimum x and y true pixel values
             x2, y2 = np.amax(mask_pixel_coordinates, axis=1)                                        # Extract the maximum x and y true pixel values
@@ -118,9 +126,9 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
                         "image_custom_info": row}                                                   # Add all the info from the current row to the dataset
         img_mask_pair_list.append(current_pair)                                                     # Append the dictionary for the current pair to the list of images for the given dataset
         count += 1                                                                                  # Increase the sample counter 
-        if "nico" in vitrolife_dataset_filepath.lower():                                            # If we are working on my local computer ...
-            if count > 12:                                                                          # ... and 25 images have already been loaded ...
-                break                                                                               # ... then that is enough, thus quit reading the rest of the images 
+        # if "nico" in vitrolife_dataset_filepath.lower():                                            # If we are working on my local computer ...
+        #     if count > 25:                                                                          # ... and 25 images have already been loaded ...
+        #         break                                                                               # ... then that is enough, thus quit reading the rest of the images 
     assert len(img_mask_pair_list) >= 1, print("No image/mask pairs found in {:s} subfolders 'raw_image' and 'masks'".format(vitrolife_dataset_filepath))
     img_mask_pair_list = natsorted(img_mask_pair_list)                                              # Sorting the list assures the same every time this function runs
     if debugging==True: img_mask_pair_list=pickSamplesWithUniquePN(img_mask_pair_list)              # If we are debugging, we'll only get one sample with each number of PN's 
@@ -143,33 +151,33 @@ def register_vitrolife_data_and_metadata_func(debugging=False):
     assert any(["vitrolife" in x for x in list(MetadataCatalog)]), "Datasets have not been registered correctly"    # Assuring the dataset has been registered correctly
 
 
-
 # Test that the function will actually return a list of dicts
-# train_dataset = img_mask_list_train = vitrolife_dataset_function(run_mode="train", visualize=False)
-# val_dataset = img_mask_list_val = vitrolife_dataset_function(run_mode="val", visualize=False)
-# test_dataset = img_mask_list_test = vitrolife_dataset_function(run_mode="test", debugging=True, visualize=False)
+train_dataset = img_mask_list_train = vitrolife_dataset_function(run_mode="train", visualize=False)
+val_dataset = img_mask_list_val = vitrolife_dataset_function(run_mode="val", visualize=False)
+test_dataset = img_mask_list_test = vitrolife_dataset_function(run_mode="test", debugging=False, visualize=True)
 
 
-# # Visualize some random samples using the Detectron2 visualizer 
-# try: register_vitrolife_data_and_metadata_func(debugging=True)
-# except Exception as ex:
-#     error_string = "An exception of type {0} occured while trying to register the datasets. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
-# vitro_metadata = MetadataCatalog.get("vitrolife_dataset_test")
-# for kk, d in enumerate(test_dataset):
-#     img = cv2.imread(d["file_name"])
-#     visualizer = Visualizer(img[:, :, ::-1], metadata=vitro_metadata, scale=0.5)
-#     out = visualizer.draw_dataset_dict(d)
-#     mask_im = out.get_image()[:, :, ::-1]
-#     img = cv2.resize(img, mask_im.shape[:-1], cv2.INTER_LINEAR)
-#     border = np.multiply(np.ones((250, 25, 3)).astype(np.uint8), (150, 0, 255)).astype(np.uint8)                # Create a border between subplots
-#     concated_image = cv2.hconcat([img, border, mask_im])
-#     window_name = "Concatenated image with {:.0f} PN".format(d["image_custom_info"]["PN_image"])
-#     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-#     cv2.imshow(window_name, concated_image)
-#     cv2.moveWindow(window_name, 40,30)
-#     cv2.resizeWindow(window_name,1100,800)
-#     cv2.waitKey(0)
-#     time.sleep(2)
-#     cv2.destroyAllWindows() 
-#     if kk >= 5:
-#         break 
+# Visualize some random samples using the Detectron2 visualizer 
+try: register_vitrolife_data_and_metadata_func(debugging=True)
+except Exception as ex:
+    error_string = "An exception of type {0} occured while trying to register the datasets. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
+vitro_metadata = MetadataCatalog.get("vitrolife_dataset_test")
+for kk, d in enumerate(test_dataset):
+    img = cv2.imread(d["file_name"])
+    visualizer = Visualizer(img[:, :, ::-1], metadata=vitro_metadata, scale=0.5)
+    out = visualizer.draw_dataset_dict(d)
+    mask_im = out.get_image()[:, :, ::-1]
+    img = cv2.resize(img, mask_im.shape[:-1], cv2.INTER_LINEAR)
+    border = np.multiply(np.ones((250, 25, 3)).astype(np.uint8), (150, 0, 255)).astype(np.uint8)                # Create a border between subplots
+    concated_image = cv2.hconcat([img, border, mask_im])
+    window_name = "Concatenated image with {:.0f} PN".format(d["image_custom_info"]["PN_image"])
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    cv2.imshow(window_name, concated_image)
+    cv2.moveWindow(window_name, 40,30)
+    cv2.resizeWindow(window_name,1100,800)
+    cv2.waitKey(0)
+    time.sleep(1)
+    cv2.destroyAllWindows() 
+    time.sleep(0.01)
+    if kk >= 15:
+        break 
