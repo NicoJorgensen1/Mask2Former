@@ -1,5 +1,6 @@
 # Import libraries 
 import shutil                                                                                               # Used to copy/rename the metrics.json file after each training/validation step
+import torch                                                                                                # Used for emptying GPU cache and hopefully avoid OOM errors 
 import os                                                                                                   # For joining paths
 import numpy as np                                                                                          # For algebraic equations 
 from time import time                                                                                       # Used to time the epoch/training duration
@@ -117,6 +118,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
 # Create function to train the objective function
 def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparameter_optimization=False):
     # Setup training variables before starting training
+    torch.cuda.empty_cache()                                                                                # Empty the GPU cache 
     objective_mode = "training"
     if FLAGS.inference_only: objective_mode = "inference"
     if hyperparameter_optimization: objective_mode = "hyperparameter optimization trial {:d}/{:d}".format(FLAGS.HPO_current_trial+1, FLAGS.num_trials)

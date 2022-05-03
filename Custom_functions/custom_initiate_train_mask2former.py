@@ -27,6 +27,7 @@ os.environ["DETECTRON2_DATASETS"] = dataset_dir
 # import tracemalloc
 # tracemalloc.start()
 # import resource
+import torch 
 from custom_callback_functions import keepAllButLatestAndBestModel                                      # Used for setting model weights on the config
 from custom_mask2former_setup_func import getBestEpochResults, zip_output, write_config_to_file         # Get metrics from the best epoch, zip output directory and write config to file
 from custom_print_and_log_func import printAndLog                                                       # Function to log the results
@@ -38,6 +39,7 @@ from custom_training_func import get_HPO_params                                 
 
 
 # Get the FLAGS, the config and the logfile. 
+torch.cuda.empty_cache()                                                                                # Empty the GPU cache 
 FLAGS, cfg, trial, log_file = perform_HPO()                                                             # Perform HPO if that is chosen 
 write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
 cfg, FLAGS = get_HPO_params(config=cfg, FLAGS=FLAGS, trial=trial, hpt_opt=False)                        # Update the config and the FLAGS with the best found parameters 
