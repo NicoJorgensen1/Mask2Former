@@ -27,35 +27,30 @@ def run_train_func(cfg):
 
 # Function to launch the training
 def launch_custom_training(FLAGS, config, dataset, epoch=0, run_mode="train", hyperparameter_opt=False, quit_training=False):
-    # try:
-        FLAGS.epoch_iter = int(np.floor(np.divide(FLAGS.num_train_files, FLAGS.batch_size)))                    # Compute the number of iterations per training epoch with the given batch size
-        config.SOLVER.MAX_ITER = FLAGS.epoch_iter * (6 if all(["train" in run_mode, hyperparameter_opt==False, "vitrolife" in FLAGS.dataset_name.lower()]) else 1)  # Increase training iteration count for precise BN computations
-        if all(["train" in run_mode, hyperparameter_opt==True]):
-            if "vitrolife" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 2)    # ... Transformer and ResNet backbones need a ...
-            elif "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 1/10)  # ... few thousand samples to accomplish anything
-        if "val" in run_mode and "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(np.ceil(np.divide(FLAGS.epoch_iter, 4)))
-        config.SOLVER.CHECKPOINT_PERIOD = config.SOLVER.MAX_ITER                                                # Save a new model checkpoint after each epoch
-        if "train" in run_mode and hyperparameter_opt==False:                                                   # If we are training ... 
-            for idx, item in enumerate(config.custom_key[::-1]):                                                # Iterate over the custom keys in reversed order
-                if "epoch_num" in item[0]:                                                                      # If the current item is the tuple with the epoch_number
-                    config.custom_key[-idx-1] = (item[0], item[1]+1)                                            # The current epoch number is updated 
-                    break                                                                                       # And the loop is broken out of 
-        config = putModelWeights(config)                                                                        # Assign the latest saved model to the config
-        if "val" in run_mode.lower(): config.SOLVER.BASE_LR = float(0)                                          # If we are on the validation split set the learning rate to 0
-        else: config.SOLVER.BASE_LR = FLAGS.learning_rate                                                       # Else, we are on the training split, so assign the latest saved learning rate to the config
-        config.DATASETS.TRAIN = dataset                                                                         # Change the config dataset used to the dataset sent along ...
-        run_train_func(cfg=config)                                                                              # Run the training for the current epoch
-        shutil.copyfile(os.path.join(config.OUTPUT_DIR, "metrics.json"),                                        # Rename the metrics.json to "run_mode"_metricsX.json ...
-            os.path.join(config.OUTPUT_DIR, run_mode+"_metrics_{:d}.json".format(epoch+1)))                     # ... where X is the current epoch number
-        os.remove(os.path.join(config.OUTPUT_DIR, "metrics.json"))                                              # Remove the original metrics file
-        shutil.copyfile(os.path.join(config.OUTPUT_DIR, "model_final.pth"),                                     # Rename the metrics.json to "run_mode"_metricsX.json ...
-            os.path.join(config.OUTPUT_DIR, "model_epoch_{:d}.pth".format(epoch+1)))                            # ... where X is the current epoch number    
-        [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if all(["model_" in x, "epoch" not in x, x.endswith(".pth")])]    # Remove all irrelevant models
-    # except Exception as ex:
-    #     error_string = "An exception of type {} occured training with the {} doing {} {}. Arguments:\n{!r}".format(type(ex).__name__, dataset, "trial" if hyperparameter_opt else "epoch", epoch+1, ex.args)
-    #     printAndLog(input_to_write=error_string, logs=FLAGS.log_file, prefix="", postfix="\n")
-    #     quit_training = True
-        return config, quit_training
+    FLAGS.epoch_iter = int(np.floor(np.divide(FLAGS.num_train_files, FLAGS.batch_size)))                    # Compute the number of iterations per training epoch with the given batch size
+    config.SOLVER.MAX_ITER = FLAGS.epoch_iter * (6 if all(["train" in run_mode, hyperparameter_opt==False, "vitrolife" in FLAGS.dataset_name.lower()]) else 1)  # Increase training iteration count for precise BN computations
+    if all(["train" in run_mode, hyperparameter_opt==True]):
+        if "vitrolife" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 3)    # ... Transformer and ResNet backbones need a ...
+        elif "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 1/10)  # ... few thousand samples to accomplish anything
+    if "val" in run_mode and "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(np.ceil(np.divide(FLAGS.epoch_iter, 4)))
+    config.SOLVER.CHECKPOINT_PERIOD = config.SOLVER.MAX_ITER                                                # Save a new model checkpoint after each epoch
+    if "train" in run_mode and hyperparameter_opt==False:                                                   # If we are training ... 
+        for idx, item in enumerate(config.custom_key[::-1]):                                                # Iterate over the custom keys in reversed order
+            if "epoch_num" in item[0]:                                                                      # If the current item is the tuple with the epoch_number
+                config.custom_key[-idx-1] = (item[0], item[1]+1)                                            # The current epoch number is updated 
+                break                                                                                       # And the loop is broken out of 
+    config = putModelWeights(config)                                                                        # Assign the latest saved model to the config
+    if "val" in run_mode.lower(): config.SOLVER.BASE_LR = float(0)                                          # If we are on the validation split set the learning rate to 0
+    else: config.SOLVER.BASE_LR = FLAGS.learning_rate                                                       # Else, we are on the training split, so assign the latest saved learning rate to the config
+    config.DATASETS.TRAIN = dataset                                                                         # Change the config dataset used to the dataset sent along ...
+    run_train_func(cfg=config)                                                                              # Run the training for the current epoch
+    shutil.copyfile(os.path.join(config.OUTPUT_DIR, "metrics.json"),                                        # Rename the metrics.json to "run_mode"_metricsX.json ...
+        os.path.join(config.OUTPUT_DIR, run_mode+"_metrics_{:d}.json".format(epoch+1)))                     # ... where X is the current epoch number
+    os.remove(os.path.join(config.OUTPUT_DIR, "metrics.json"))                                              # Remove the original metrics file
+    shutil.copyfile(os.path.join(config.OUTPUT_DIR, "model_final.pth"),                                     # Rename the metrics.json to "run_mode"_metricsX.json ...
+        os.path.join(config.OUTPUT_DIR, "model_epoch_{:d}.pth".format(epoch+1)))                            # ... where X is the current epoch number    
+    [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if all(["model_" in x, "epoch" not in x, x.endswith(".pth")])]    # Remove all irrelevant models
+    return config, quit_training
 
 
 # Define a function to create the hyper parameters of the trials
