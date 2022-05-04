@@ -120,7 +120,7 @@ parser.add_argument("--weight_decay", type=float, default=1e-4, help="The weight
 parser.add_argument("--min_delta", type=float, default=5e-4, help="The minimum improvement the model must have made in order to be accepted as an actual improvement. Default 5e-4")
 parser.add_argument("--ignore_background", type=str2bool, default=False, help="Whether or not we are ignoring the background class. True = Ignore background, False = reward/penalize for background predictions. Default: False")
 parser.add_argument("--crop_enabled", type=str2bool, default=False, help="Whether or not cropping is allowed on the images. Default: False")
-parser.add_argument("--hp_optim", type=str2bool, default=False, help="Whether or not we are initiating the training with a hyperparameter optimization. Default: True")
+parser.add_argument("--hp_optim", type=str2bool, default=True, help="Whether or not we are initiating the training with a hyperparameter optimization. Default: True")
 parser.add_argument("--inference_only", type=str2bool, default=False, help="<< Currently not supported >> Whether or not training is skipped and only inference is run. This input argument deprecates the '--eval_only' argument. Default: False")
 parser.add_argument("--display_images", type=str2bool, default=False, help="Whether or not some random sample images are displayed before training starts. Default: False")
 parser.add_argument("--use_transformer_backbone", type=str2bool, default=True, help="Whether or not we are using the extended swin_small_transformer backbone. Default: True")
