@@ -9,7 +9,6 @@ from tqdm import tqdm                                                           
 from copy import deepcopy
 from custom_register_vitrolife_dataset import vitrolife_dataset_function
 from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader
-from mask2former import MaskFormerInstanceDatasetMapper
 from detectron2.engine.defaults import DefaultPredictor
 from mask2former.modeling.matcher import HungarianMatcher
 from custom_print_and_log_func import printAndLog                                           # Function to log results
@@ -103,8 +102,71 @@ def draw_mask_image(mask_list, lbl_list, meta_data):
     return final_im                                                                         # Return the final image 
 
 
+# Function to perform the Hungarian matching between true masks and predicted masks
+def hungarian_matching(y_pred_dict, data, predictor, matcher, FLAGS, meta_data):
+    img = torch.permute(data["image"], (1,2,0)).numpy()                                     # Read the true image as a numpy array from the data dictionary 
+    true_classes = data["instances"].get_fields()["gt_classes"].numpy().tolist()            # Read the true classes from the data dictionary
+    pred_masks = y_pred_dict["pred_masks"]                                                  # pred_masks is a tensor of shape [Q, H, W] of float values
+    if len(true_classes) < 1: y_pred = np.zeros_like(img)                                   # If no true objects are present on the image, no matching can be made ...
+    else:                                                                                   # Else, if any ground truth object is present on the original image ...
+        img_torch = torch.reshape(data["image"], (1,)+tuple(data["image"].shape))           # Reshape the torch-type image into shape [1, C, H, W]
+        features = predictor.model.backbone(img_torch.to(predictor.model.device).to(torch.float))   # Compute the image features using the backbone model
+        outputs = predictor.model.sem_seg_head(features)                                    # Compute the outputs => a dictionary with keys [pred_logits, pred_masks, aux_outputs].
+        targets = [{"labels": data["instances"].get_fields()["gt_classes"],                 # The target must be a list of length batch_size containing ...
+                    "masks": data["instances"].get_fields()["gt_masks"]}]                   # ... dicts with keys "labels" and "masks" for each image
+        matched_output = matcher.forward(outputs=outputs, targets=targets)[0]               # Performs the Hungarian matching and outputs a list of [[idx_row], [idx_col]] ...
+        row_pred_indices = matched_output[0].numpy()                                        # This is the row_idx of the matching, i.e. the index of the "chosen" predicted mask and lbl
+        col_pred_indices = matched_output[1].numpy()                                        # This is the col_idx of the matching, i.e. the index of the "chosen" true instance label idx
+        assert pred_masks.shape[0] == FLAGS.num_queries == outputs["pred_masks"].shape[1], "This fucking has to work"
+        y_pred_masks = [x for x in pred_masks[row_pred_indices].numpy().astype(bool)]       # This is the matced predicted masks
+        y_pred_lbls = np.asarray(true_classes)[col_pred_indices].tolist()                   # This is the matched predicted class labels for each of the predicted masks
+        y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
+    return y_pred
+
+
+# Function to compute non max suppression for the predicted object instances 
+def NMS_pred(y_pred_dict, data, meta_data, conf_thresh, IoU_thresh):
+    # Read the image and initiate an empty prediction
+    img = torch.permute(data["image"], (1,2,0)).numpy()                                     # Read the true image as a numpy array from the data dictionary 
+    y_pred_mask = np.zeros_like(img)                                                        # Initiate the 
+    
+    # Get the predicted classes, scores and masks
+    pred_classes = y_pred_dict["pred_classes"].numpy()                                      # pred_classes is an array of shape [Q] only containing integer class_id's. For inference only, when no true labels are available
+    pred_scores = y_pred_dict["scores"].numpy()                                             # pred_scores  is an array of shape [Q] containing the class confidence scores from the predictions 
+    pred_masks = y_pred_dict["pred_masks"].numpy()                                          # pred_masks is an array of shape [Q, H, W] of float values
+
+    # Filter out all masks with a confidence score below threshold
+    thres_idx = (pred_scores >= conf_thresh)
+    if thres_idx.sum() >= 1:
+        pred_classes = pred_classes[thres_idx]
+        pred_scores = pred_scores[thres_idx]
+        pred_masks = pred_masks[thres_idx]
+
+        # Sort all predictions by their confidence score
+        conf_idx = np.argsort(pred_scores)[::-1]
+        pred_classes = pred_classes[conf_idx]
+        pred_scores = pred_scores[conf_idx]
+        pred_masks = pred_masks[conf_idx]
+
+        # Iterate through all predictions 
+        used_masks, used_lbls = list(), list()
+        for mask, lbl in zip(pred_masks, pred_classes):
+            # Append the mask and lbl with the highest confidence scores among the remaining predictions
+            IoU_with_used = list()
+            if len(used_masks) >= 1:
+                for used_mask in used_masks:
+                    intersection_ = np.logical_and(mask, used_mask).sum()
+                    union_ = np.logical_or(mask, used_mask).sum()
+                    IoU_with_used.append(np.divide(intersection_, union_))
+                if any(np.greater_equal(IoU_with_used, IoU_thresh)): continue
+            used_masks.append(mask)
+            used_lbls.append(lbl)
+        y_pred_mask = draw_mask_image(mask_list=used_masks, lbl_list=used_lbls, meta_data=meta_data)
+    return y_pred_mask
+
+
 # Define a function to predict some label-masks for the dataset
-def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False, device="cpu"):
+def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False, device="cpu", matching_type="Hungarian"):
     if model_done_training==False:                                                          # If the model hasn't finished training ...
         config = putModelWeights(config)                                                    # ... change the config and append the latest model as the used checkpoint, if the model is still training
     if data_batch is None:                                                                  # If no batch with data was send to the function ...
@@ -126,10 +188,6 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
     predictor = DefaultPredictor(config_prediction)                                         # Create an instance of the DefaultPredictor with the changed config 
     matcher = HungarianMatcher(cost_class=FLAGS.class_loss_weight, cost_dice=FLAGS.dice_loss_weight,    # Create an instance of the ...
             cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)     # ... Hungarian Matcher class
-    
-
-
-
     img_ytrue_ypred = {"input": list(), "y_pred": list(), "y_true": list(), "PN": list()}   # Initiate a dictionary to store the input images, ground truth masks and the predicted masks
     for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloade
         img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Make input image numpy format and [H,W,C]
@@ -137,26 +195,18 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         # The ground truth prediction image 
         true_classes = data["instances"].get_fields()["gt_classes"].numpy().tolist()        # Get the true class labels for the instances on the current image
         true_masks = [x.astype(bool) for x in data["instances"].get_fields()["gt_masks"].numpy()]   # Get the true binary masks for the instances on the current image
-        y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data)  # Create a mask image for the true masks
+        if len(true_classes) < 1: y_true = np.zeros_like(a=img)                             # If no objects are in the image, the y_true is simply a black image 
+        else: y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data)  # If objects are present, create a mask image for the true masks
         # plt.imshow(y_true)
         # plt.show(block=False)
 
         # The predicted image 
         y_pred_dict = predictor.__call__(img)["instances"].get_fields()                     # y_pred_dict is a dict with keys ['pred_masks', 'pred_boxes', 'scores', 'pred_classes']
-        pred_masks = y_pred_dict["pred_masks"]                                              # pred_masks is a tensor of shape [100, H, W] of float values
-        pred_classes = y_pred_dict["pred_classes"]                                          # pred_classes is a tensor of shape [100] only containing integer class_id's. This is only used for inference, not when we have true labels
-        img_torch = torch.reshape(data["image"], (1,)+tuple(data["image"].shape))           # Reshape the torch-type image into shape [1, C, H, W]
-        features = predictor.model.backbone(img_torch.to(predictor.model.device).to(torch.float))   # Compute the image features using the backbone model
-        outputs = predictor.model.sem_seg_head(features)                                    # Compute the outputs => a dictionary with keys [pred_logits, pred_masks, aux_outputs].
-        targets = [{"labels": data["instances"].get_fields()["gt_classes"],                 # The target must be a list of length batch_size containing ...
-                    "masks": data["instances"].get_fields()["gt_masks"]}]                   # ... dicts with keys "labels" and "masks" for each image
-        matched_output = matcher.forward(outputs=outputs, targets=targets)[0]               # Performs the Hungarian matching and outputs a list of [[idx_row], [idx_col]] ...
-        row_pred_indices = matched_output[0].numpy()                                        # This is the row_idx of the matching, i.e. the index of the "chosen" predicted mask and lbl
-        col_pred_indices = matched_output[1].numpy()                                        # This is the col_idx of the matching, i.e. the index of the "chosen" true instance label idx
-        assert pred_masks.shape[0] == FLAGS.num_queries == outputs["pred_masks"].shape[1], "This fucking has to work"
-        y_pred_masks = [x for x in pred_masks[row_pred_indices].numpy().astype(bool)]       # This is the matced predicted masks
-        y_pred_lbls = np.asarray(true_classes)[col_pred_indices].tolist()                   # This is the matched predicted class labels for each of the predicted masks
-        y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
+        if "hungarian" in matching_type.lower():                                            # If we are matching objects using Hungarian algorithm ... 
+            y_pred = hungarian_matching(y_pred_dict=y_pred_dict, data=data,                 # ... compute the Hungarian matching ...
+                    predictor=predictor, matcher=matcher, FLAGS=FLAGS, meta_data=meta_data) # ... between ground truth and predictions
+        else: y_pred = NMS_pred(y_pred_dict=y_pred_dict, data=data,                         # Else, the matching will be done ...
+                        conf_thresh=0.50, IoU_thresh=0.35, meta_data=meta_data)             # ... using plain non max suppression 
         
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
@@ -178,7 +228,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
 # config = cfg
 
 # Define function to plot the images
-def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False, device="cpu"):
+def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False, device="cpu", matching_type="NMS"):
     # Get the datasplit and number of images to show
     fig_list, data_batches_final = list(), list()                                           # Initiate the list to store the figures in
     if data_batches is None:                                                                # If no previous data has been sent ...
@@ -203,7 +253,7 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
         if "vitrolife" not in FLAGS.dataset_name.lower() and data_split=="test": continue   # Only vitrolife has a test dataset. ADE20K doesn't. 
         # Extract information about the dataset used
         img_ytrue_ypred, data_batch, FLAGS, config = create_batch_img_ytrue_ypred(config=config, data_split=data_split, # Create the batch of images that needs to be visualized ...
-            FLAGS=FLAGS, data_batch=data_batch, model_done_training=model_done_training, device=device) # ... and return the images in the data_batch dictionary
+            FLAGS=FLAGS, data_batch=data_batch, model_done_training=model_done_training, device=device, matching_type=matching_type) # ... and return the images in the data_batch dictionary
         class_names = list(reversed(thing_names))
         # max_PN_num = np.max(img_ytrue_ypred["PN"])
         # max_PN_num = 0

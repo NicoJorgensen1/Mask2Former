@@ -38,7 +38,7 @@ def lr_scheduler(cfg, history, FLAGS, lr_updated):
 
 
 # Define a function to delete all models but the 
-def keepAllButLatestAndBestModel(config, history, FLAGS, bestOrLatest="latest", delete_leftovers=True, logs=None):
+def keepAllButLatestAndBestModel(config, history, FLAGS, bestOrLatest="latest", delete_leftovers=True, logs=None, model_done_training=False):
     cfg = deepcopy(config) 
     del config
     model_files = natsorted([x for x in os.listdir(cfg.OUTPUT_DIR) if "model_epoch" in x.lower()])  # Get a list of available models
@@ -54,7 +54,8 @@ def keepAllButLatestAndBestModel(config, history, FLAGS, bestOrLatest="latest", 
         models_to_delete = []                                                                   # Initiate a list of the model filenames that will be deleted
         if delete_leftovers == True:                                                            # If we want to delete the leftovers ...
             for model in model_files:                                                           # ... we'll iterate over all model files ...
-                if best_model in model or latest_model in model: continue                       # ... and if the current model isn't either the best model or the latest model ...
+                if any([best_model in model, latest_model in model]) and not model_done_training: continue  # ... and if the model hasn't finished training and the current model name is neither best or latest ...
+                elif all([model_done_training, best_model in model]): continue                  # ... or if the model has finished training and the current model isn't the best model ...
                 os.remove(os.path.join(cfg.OUTPUT_DIR, model))                                  # ... it is deleted ...
                 models_to_delete.append(model)                                                  # ... and the model name is added to the list of models that must be deleted
         cfg.MODEL.WEIGHTS = os.path.join(cfg.OUTPUT_DIR, latest_model if "latest" in bestOrLatest.lower() else best_model)  # Set the model weights as either the best or the latest model
@@ -62,7 +63,7 @@ def keepAllButLatestAndBestModel(config, history, FLAGS, bestOrLatest="latest", 
         if logs is not None:
             printAndLog(input_to_write="The model files: {}. The metrics_list {}".format(model_files, metric_list), logs=logs, prefix="\n\n")
             printAndLog(input_to_write="The best model idx is: {}, thus epoch {}, named {}. The latest model is {}".format(best_model_idx, best_epoch, best_model, latest_model), logs=logs)
-            printAndLog(input_to_write="latest_model if 'latest' in bestOrLatest.lower() else best_model => {}. Thus model_to_keep = {}".format(latest_model if "latest" in bestOrLatest.lower() else best_model, model_to_keep), logs=logs)
+            printAndLog(input_to_write="bestOrLatest: {} => {}. Thus model_to_keep = {}".format(bestOrLatest, latest_model if "latest" in bestOrLatest.lower() else best_model, model_to_keep), logs=logs)
             printAndLog(input_to_write="The model_weights in the config: {}".format(cfg.MODEL.WEIGHTS), logs=logs)
             printAndLog(input_to_write="The models to delete: {}".format(models_to_delete), logs=logs, postfix="\n\n")
     return cfg                                                                                  # Return the config where the cfg.MODEL.WEIGHTS are set to the chosen model

@@ -54,8 +54,8 @@ printAndLog(input_to_write=model_analysis, logs=log_file, oneline=False, length=
 
 # Visualize some random images before training  => this will for some reason kill the process on my local machine ...
 data_batches = None 
-# if "nico" not in Mask2Former_dir.lower():
-fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS)           # Visual some segmentation on random images before training
+if "nico" not in Mask2Former_dir.lower():
+    fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS)           # Visual some segmentation on random images before training
 
 # Train the model with the best found hyperparameters
 history, test_history, new_best, best_epoch, cfg = objective_train_func(trial=trial, FLAGS=FLAGS,       # Start the training with ...
@@ -63,7 +63,7 @@ history, test_history, new_best, best_epoch, cfg = objective_train_func(trial=tr
 printAndLog(input_to_write="Now training is completed", logs=log_file)
 
 # Add the model checkpoint with the best performing weights to the config 
-cfg = keepAllButLatestAndBestModel(config=cfg, history=history, FLAGS=FLAGS, bestOrLatest="best", logs=log_file)    # Put the model weights for the best performing model on the config
+cfg = keepAllButLatestAndBestModel(config=cfg, history=history, FLAGS=FLAGS, bestOrLatest="best", logs=log_file, model_done_training=True)    # Put the model weights for the best performing model on the config
 
 # Print and log the best metric results
 printAndLog(input_to_write="Final results:".upper(), logs=log_file)
@@ -77,7 +77,6 @@ if "vitrolife" in FLAGS.dataset_name.lower():                                   
 
 # Remove all metrics.json files and the default log-file and write config to file, visualize the images and zip output directory
 [os.remove(os.path.join(cfg.OUTPUT_DIR, x)) for x in os.listdir(cfg.OUTPUT_DIR) if "metrics" in x.lower() and x.endswith(".json")]  # Remove all metrics files
-os.remove(os.path.join(cfg.OUTPUT_DIR, "log.txt"))                                                      # Remove the original log file 
 write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
 try: visualize_the_images(config=cfg,FLAGS=FLAGS, data_batches=data_batches, model_done_training=True)  # Visualize the images again after training 
 except Exception as ex:

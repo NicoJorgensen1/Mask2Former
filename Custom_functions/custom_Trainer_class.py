@@ -51,8 +51,8 @@ class CosineParamScheduler2(CosineParamScheduler):
     
     def __call__(self, where):
         where = float(where)
-        new_lr = float(np.add(self._end_value, np.multiply(np.multiply(0.75, np.subtract(self._start_value, self._end_value)), (np.add(1, np.cos(np.multiply(np.pi, where)))))))
-        # new_lr = float(self._end_value + 0.5 * (self._start_value - self._end_value) * (1 + np.cos(np.pi * where)))
+        new_lr = float(np.add(self._end_value, np.multiply(np.multiply(0.50, np.subtract(self._start_value, self._end_value)), (np.add(1, np.cos(np.multiply(np.pi, where)))))))
+        # new_lr = float(self._end_value + 0.50 * (self._start_value - self._end_value) * (1 + np.cos(np.pi * where)))
         return new_lr
 
 

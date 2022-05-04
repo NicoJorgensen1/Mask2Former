@@ -13,7 +13,7 @@ from detectron2.structures import BoxMode
 from detectron2.utils.visualizer import Visualizer
 
 # Create dictionary to store the class names and IDs 
-class_labels = {kk: val for kk,val in enumerate(["Well", "Zona", "Perivitelline space", "Cell", "PN"])}
+# class_labels = {kk: val for kk,val in enumerate(["Well", "Zona", "Perivitelline space", "Cell", "PN"])}
 class_labels = {kk: val for kk, val in enumerate(["PN"])}
 
 # Function to select sample dictionaries with unique PN's
@@ -126,9 +126,9 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
                         "image_custom_info": row}                                                   # Add all the info from the current row to the dataset
         img_mask_pair_list.append(current_pair)                                                     # Append the dictionary for the current pair to the list of images for the given dataset
         count += 1                                                                                  # Increase the sample counter 
-        # if "nico" in vitrolife_dataset_filepath.lower():                                            # If we are working on my local computer ...
-        #     if count > 25:                                                                          # ... and 25 images have already been loaded ...
-        #         break                                                                               # ... then that is enough, thus quit reading the rest of the images 
+        if "nico" in vitrolife_dataset_filepath.lower():                                            # If we are working on my local computer ...
+            if count > 25:                                                                          # ... and 25 images have already been loaded ...
+                break                                                                               # ... then that is enough, thus quit reading the rest of the images 
     assert len(img_mask_pair_list) >= 1, print("No image/mask pairs found in {:s} subfolders 'raw_image' and 'masks'".format(vitrolife_dataset_filepath))
     img_mask_pair_list = natsorted(img_mask_pair_list)                                              # Sorting the list assures the same every time this function runs
     if debugging==True: img_mask_pair_list=pickSamplesWithUniquePN(img_mask_pair_list)              # If we are debugging, we'll only get one sample with each number of PN's 
@@ -137,8 +137,6 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
 
 # Function to register the dataset and the meta dataset for each of the three splitshuffleshuffles, [train, val, test]
 def register_vitrolife_data_and_metadata_func(debugging=False):
-    # thing_colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0),                                   # Set random colors for the Well, Zona, PV Space and Cell classes
-    #     (185,220,255), (255,185,220), (220,255,185), (185,255,0), (0,185,220), (220,0,185), (115,45,115), (45,115,45)]  # Set similar colors for the PN classes
     thing_colors = [(185,220,255), (255,185,220), (220,255,185), (185,255,0),                       # Set colors for the ...
                     (0,185,220), (220,0,185), (115,45,115), (45,115,45)]                            # ... different numbers of PNs 
     thing_id = {kk: key for kk,key in enumerate(list(class_labels.keys()))}                         # Get a dictionary of continuous keys
@@ -152,32 +150,32 @@ def register_vitrolife_data_and_metadata_func(debugging=False):
 
 
 # Test that the function will actually return a list of dicts
-train_dataset = img_mask_list_train = vitrolife_dataset_function(run_mode="train", visualize=False)
-val_dataset = img_mask_list_val = vitrolife_dataset_function(run_mode="val", visualize=False)
-test_dataset = img_mask_list_test = vitrolife_dataset_function(run_mode="test", debugging=False, visualize=True)
+# train_dataset = img_mask_list_train = vitrolife_dataset_function(run_mode="train", visualize=False)
+# val_dataset = img_mask_list_val = vitrolife_dataset_function(run_mode="val", visualize=False)
+# test_dataset = img_mask_list_test = vitrolife_dataset_function(run_mode="test", debugging=False, visualize=False)
 
 
-# Visualize some random samples using the Detectron2 visualizer 
-try: register_vitrolife_data_and_metadata_func(debugging=True)
-except Exception as ex:
-    error_string = "An exception of type {0} occured while trying to register the datasets. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
-vitro_metadata = MetadataCatalog.get("vitrolife_dataset_test")
-for kk, d in enumerate(test_dataset):
-    img = cv2.imread(d["file_name"])
-    visualizer = Visualizer(img[:, :, ::-1], metadata=vitro_metadata, scale=0.5)
-    out = visualizer.draw_dataset_dict(d)
-    mask_im = out.get_image()[:, :, ::-1]
-    img = cv2.resize(img, mask_im.shape[:-1], cv2.INTER_LINEAR)
-    border = np.multiply(np.ones((250, 25, 3)).astype(np.uint8), (150, 0, 255)).astype(np.uint8)                # Create a border between subplots
-    concated_image = cv2.hconcat([img, border, mask_im])
-    window_name = "Concatenated image with {:.0f} PN".format(d["image_custom_info"]["PN_image"])
-    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-    cv2.imshow(window_name, concated_image)
-    cv2.moveWindow(window_name, 40,30)
-    cv2.resizeWindow(window_name,1100,800)
-    cv2.waitKey(0)
-    time.sleep(1)
-    cv2.destroyAllWindows() 
-    time.sleep(0.01)
-    if kk >= 15:
-        break 
+# # Visualize some random samples using the Detectron2 visualizer 
+# try: register_vitrolife_data_and_metadata_func(debugging=True)
+# except Exception as ex:
+#     error_string = "An exception of type {0} occured while trying to register the datasets. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
+# vitro_metadata = MetadataCatalog.get("vitrolife_dataset_test")
+# for kk, d in enumerate(test_dataset):
+#     img = cv2.imread(d["file_name"])
+#     visualizer = Visualizer(img[:, :, ::-1], metadata=vitro_metadata, scale=0.5)
+#     out = visualizer.draw_dataset_dict(d)
+#     mask_im = out.get_image()[:, :, ::-1]
+#     img = cv2.resize(img, mask_im.shape[:-1], cv2.INTER_LINEAR)
+#     border = np.multiply(np.ones((250, 25, 3)).astype(np.uint8), (150, 0, 255)).astype(np.uint8)                # Create a border between subplots
+#     concated_image = cv2.hconcat([img, border, mask_im])
+#     window_name = "Concatenated image with {:.0f} PN".format(d["image_custom_info"]["PN_image"])
+#     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+#     cv2.imshow(window_name, concated_image)
+#     cv2.moveWindow(window_name, 40,30)
+#     cv2.resizeWindow(window_name,1100,800)
+#     cv2.waitKey(0)
+#     time.sleep(1)
+#     cv2.destroyAllWindows() 
+#     time.sleep(0.01)
+#     if kk >= 15:
+#         break 

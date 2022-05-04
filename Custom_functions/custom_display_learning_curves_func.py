@@ -86,10 +86,13 @@ def extractRelevantHistoryKeys(history):
     Precision_IoU50_Cell = [key for key in history.keys() if "precision" in key and key.endswith("C4")]
     Precision_IoU50_PN = [key for key in history.keys() if "precision" in key and key.endswith("C5")]
     
-    hist_keys_list = [loss_total, AP_total, AP_50, Precision_IoU50, loss_ce, loss_dice, loss_mask, 
-            learn_rate, AP_75, AP_Small, AP_Medium, AP_Large, AP_Well, AP_Zona, AP_PV_space, AP_Cell,
-            AP_PN, Precision_IoU50_Well, Precision_IoU50_Zona, Precision_IoU50_PV_space,
-            Precision_IoU50_Cell, Precision_IoU50_PN]
+    # hist_keys_list = [loss_total, AP_total, AP_50, Precision_IoU50, loss_ce, loss_dice, loss_mask, 
+    #         learn_rate, AP_75, AP_Small, AP_Medium, AP_Large, AP_Well, AP_Zona, AP_PV_space, AP_Cell,
+    #         AP_PN, Precision_IoU50_Well, Precision_IoU50_Zona, Precision_IoU50_PV_space,
+    #         Precision_IoU50_Cell, Precision_IoU50_PN]
+    
+    hist_keys_list = [loss_total, AP_total, Precision_IoU50, loss_ce,
+                        loss_dice, loss_mask, AP_50, AP_75, learn_rate]
     return hist_keys_list
 
 
@@ -124,13 +127,11 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
         history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_train, data_split="train", history=history)
     history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_eval, data_split="val", history=history)
     hist_keys = extractRelevantHistoryKeys(history)
-    ax_titles = ["Total_loss", "AP@.5:.05:.95", "AP50", "Precision_IoU@50", "Loss_CE", "Loss_DICE",     # Create titles for the axes, legends and y labels
-        "Loss_mask", "Learning_rate", "AP75", "AP_small", "AP_medium", "AP_large", "AP_Well", 
-        "AP_Zona", "AP_PV_space", "AP_Cell", "AP_PN", "Precision_IoU@50_Well", "Precision_IoU@50_Zona", 
-         "Precision_IoU@50_PV_space", "Precision_IoU@50_Cell", "Precision_IoU@50_PN"]
+    ax_titles = ["Total_loss", "AP@.5:.05:.95", "Precision_IoU@50", "Loss_CE",                          # Create titles for the axes, ...
+                    "Loss_DICE", "Loss_mask", "AP50", "AP75", "Learning_rate"]                          # ... legends and y labels
     colors = ["blue", "red", "black", "green", "magenta", "cyan", "yellow", "deeppink", "purple",       # Create colors for ... 
                 "peru", "darkgrey", "gold", "springgreen", "orange", "crimson", "lawngreen"]            # ... the line plots
-    n_rows, n_cols, ax_count = 5, (4,4,4,5,5), 0                                                        # Initiate values for the number of rows and columns
+    n_rows, n_cols, ax_count = 3, (3,3,3), 0                                                            # Initiate values for the number of rows and columns
     if FLAGS.num_classes > 10:                                                                          # If there are more than 10 classes (i.e. for ADE20K_dataset) ...
         n_rows, n_cols = 3, (4,4,4)                                                                     # ... the number of rows and columns gets reduced ...
         class_names = MetadataCatalog[config.DATASETS.TRAIN[0]].thing_classes                           # Get the class names for the dataset
@@ -157,21 +158,23 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
                 x_vals = np.linspace(start=start_val, stop=np.max(history["val_epoch_num"]), num=len(history[key])) # Create the x-axis values as a linearly spaced array from epoch start_val to the latest epoch 
                 if "precision" in key:                                                                  # If "precision" is in the key it means we are plotting a precision-recall curve  ...
                     x_vals = np.round(np.linspace(start=0, stop=1, num=len(history[key])), 2)           # ... with equally spaced recall values of R=[0, 0.01, 1] 
-                    plt.xlim(left=np.min(x_vals), right=np.max(x_vals))
-                    plt.xlabel(xlabel="Recall")
-                    plt.ylabel(ylabel="Precision")
-                plt.plot(x_vals, np.asarray(history[key]).ravel(), color=colors[kk], linestyle="-", marker=".") # Plot the x and y values
+                    plt.xlim(left=np.min(x_vals), right=np.max(x_vals))                                 # Set the xlim for the precision-recall plot 
+                    plt.xlabel(xlabel="Recall")                                                         # Set the xlabel for the precision-recall plot 
+                    plt.ylabel(ylabel="Precision")                                                      # Set the ylabel for the precision-recall plot 
+                y_val = np.asarray(history[key]).ravel()                                                # Read the y-values to plot
+                plt.plot(x_vals, y_val, color=colors[kk], linestyle="-", marker=".")                    # Plot the x and y values
             plt.legend(sorted([key for key in hist_keys[ax_count]], key=str.lower),                     # Create a legend for the subplot with ...
                     framealpha=0.35, loc="best" if len(hist_keys[ax_count])<4 else "upper left")        # ... the history keys displayed
             ax_count += 1                                                                               # Increase the subplot counter
-        if y_top_val <= 0.05 and "lr" not in key.lower(): plt.ylim(bottom=-0.05, top=0.05)              # If the max y-value is super low, the limits are changed ...
-        elif y_top_val < 10: plt.ylim(bottom=0, top=y_top_val*1.075)                                    # If the max y-value is low, the limits are changed ...
-        else: plt.ylim(bottom=0, top=y_top_val)                                                         # Set the final, updated y_top_value as the y-top-limit on the current subplot axes
-        if "lr" in key.lower():                                                                         # If we are plotting the learning rate ...
-            plt.ylim(bottom=np.min(history[key])*0.9, top=np.max(history[key])*1.075)                   # ... the y_limits are changed
-            plt.yscale('log')                                                                           # ... the y_scale will be logarithmic
+            if y_top_val <= 0.05 and "lr" not in key.lower(): plt.ylim(bottom=-0.05, top=0.05)          # If the max y-value is super low, the limits are changed ...
+            elif y_top_val < 10: plt.ylim(bottom=0, top=y_top_val*1.075)                                # If the max y-value is low, the limits are changed ...
+            else: plt.ylim(bottom=0, top=y_top_val)                                                     # Set the final, updated y_top_value as the y-top-limit on the current subplot axes
+            if "lr" in key.lower():                                                                     # If we are plotting the learning rate ...
+                plt.ylim(bottom=np.min(history[key])*0.9, top=np.max(history[key])*1.075)               # ... the y_limits are changed
+                plt.yscale('log')                                                                       # ... the y_scale will be logarithmic
     try: fig.savefig(os.path.join(config.OUTPUT_DIR, "Learning_curves.jpg"), bbox_inches="tight")       # Try and save the figure in the OUTPUR_DIR ...
     except: pass                                                                                        # ... otherwise simply skip saving the figure
+    fig.tight_layout()
     fig.show() if FLAGS.display_images==True else plt.close(fig)                                        # If the user chose to not display the figure, the figure is closed
     return history                                                                                      # The history dictionary is returned
 

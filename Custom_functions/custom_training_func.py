@@ -5,8 +5,6 @@ import os                                                                       
 import numpy as np                                                                                          # For algebraic equations 
 from time import time                                                                                       # Used to time the epoch/training duration
 from copy import  deepcopy                                                                                  # Used to create a new copy in memory
-from detectron2.utils import comm                                                                           # Something with GPU processing
-from detectron2.utils.logger import setup_logger                                                            # Setup the logger that will perform logging of events
 from custom_Trainer_class import My_GoTo_Trainer                                                            # To instantiate the Trainer class
 from custom_mask2former_setup_func import save_dictionary                                                   # Save history_dict
 from custom_print_and_log_func import printAndLog                                                           # Function to log the results 
@@ -19,7 +17,6 @@ from custom_callback_functions import early_stopping, lr_scheduler, keepAllButLa
 
 # Run the training function 
 def run_train_func(cfg):
-    setup_logger(output=cfg.OUTPUT_DIR, distributed_rank=comm.get_rank(), name="mask_former")               # Setup a logger for the mask module
     Trainer = My_GoTo_Trainer(cfg)
     Trainer.resume_or_load(resume=False)
     return Trainer.train()
@@ -28,7 +25,7 @@ def run_train_func(cfg):
 # Function to launch the training
 def launch_custom_training(FLAGS, config, dataset, epoch=0, run_mode="train", hyperparameter_opt=False, quit_training=False):
     FLAGS.epoch_iter = int(np.floor(np.divide(FLAGS.num_train_files, FLAGS.batch_size)))                    # Compute the number of iterations per training epoch with the given batch size
-    config.SOLVER.MAX_ITER = FLAGS.epoch_iter * (6 if all(["train" in run_mode, hyperparameter_opt==False, "vitrolife" in FLAGS.dataset_name.lower()]) else 1)  # Increase training iteration count for precise BN computations
+    config.SOLVER.MAX_ITER = FLAGS.epoch_iter * (5 if all(["train" in run_mode, hyperparameter_opt==False, "vitrolife" in FLAGS.dataset_name.lower()]) else 1)  # Increase training iteration count for precise BN computations
     if all(["train" in run_mode, hyperparameter_opt==True]):
         if "vitrolife" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 3)    # ... Transformer and ResNet backbones need a ...
         elif "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 1/10)  # ... few thousand samples to accomplish anything
@@ -59,9 +56,9 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
     if all([hpt_opt==True, trial is not None, FLAGS.hp_optim==True]):
         # Set limits on the possible HPO values 
         batch_size_max = 1
-        # if FLAGS.use_transformer_backbone==True:
-        #     batch_size_max = np.max([1, int(np.floor(np.min(FLAGS.available_mem_info)/15000))]) * FLAGS.num_gpus
-        # else: batch_size_max = int(np.ceil(np.min(FLAGS.available_mem_info)/1500))
+        if FLAGS.use_transformer_backbone==True:
+            batch_size_max = np.max([1, int(np.floor(np.min(FLAGS.available_mem_info)/15000))]) * FLAGS.num_gpus
+        else: batch_size_max = int(np.ceil(np.min(FLAGS.available_mem_info)/2500))
         
         # Change the FLAGS parameters and then change the config
         FLAGS.learning_rate = trial.suggest_float(name="learning_rate", low=1e-8, high=7e-5)
