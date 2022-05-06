@@ -27,15 +27,16 @@ os.environ["DETECTRON2_DATASETS"] = dataset_dir
 # import tracemalloc
 # tracemalloc.start()
 # import resource
-import torch 
-from custom_callback_functions import keepAllButLatestAndBestModel                                      # Used for setting model weights on the config
-from custom_mask2former_setup_func import getBestEpochResults, zip_output, write_config_to_file         # Get metrics from the best epoch, zip output directory and write config to file
+import torch                                                                                            # For cleaning cuda cache 
+import numpy as np                                                                                      # For computing different arithmetics 
 from custom_print_and_log_func import printAndLog                                                       # Function to log the results
 from custom_analyze_model_func import analyze_model_func                                                # Analyze the model FLOPS, number of parameters and activations computed
 from custom_training_func import objective_train_func                                                   # Function to launch the training with the given dataset
 from custom_image_batch_visualize_func import visualize_the_images                                      # Functions visualize the image batch
 from custom_HPO_func import perform_HPO                                                                 # Function to perform HPO and read the input variables
 from custom_training_func import get_HPO_params                                                         # Function to change the config and FLAGS parameters 
+from custom_mask2former_setup_func import getBestEpochResults, zip_output, write_config_to_file         # Get metrics from the best epoch, zip output directory and write config to file
+from custom_callback_functions import keepAllButLatestAndBestModel                                      # Used for setting model weights on the config
 
 
 # Get the FLAGS, the config and the logfile. 
@@ -58,12 +59,12 @@ if "nico" not in Mask2Former_dir.lower():
     fig_list_before, data_batches, cfg, FLAGS = visualize_the_images(config=cfg, FLAGS=FLAGS)           # Visual some segmentation on random images before training
 
 # Train the model with the best found hyperparameters
-history, test_history, new_best, best_epoch, cfg = objective_train_func(trial=trial, FLAGS=FLAGS,       # Start the training with ...
-            cfg=cfg, logs=log_file, data_batches=data_batches, hyperparameter_optimization=False)       # ... the optimal hyper parameters
+history, test_history, new_best, best_epoch, cfg, PN_pred, PN_true = objective_train_func(trial=trial,  # Start the training with ...
+    FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=data_batches, hyperparameter_optimization=False)  # ... the optimal hyper parameters
 printAndLog(input_to_write="Now training is completed", logs=log_file)
 
 # Add the model checkpoint with the best performing weights to the config 
-cfg = keepAllButLatestAndBestModel(config=cfg, history=history, FLAGS=FLAGS, bestOrLatest="best", logs=log_file, model_done_training=True)    # Put the model weights for the best performing model on the config
+cfg = keepAllButLatestAndBestModel(config=cfg, history=history, FLAGS=FLAGS, bestOrLatest="best", model_done_training=True) # Put the model weights for the best performing model on the config
 
 # Print and log the best metric results
 printAndLog(input_to_write="Final results:".upper(), logs=log_file)
@@ -72,8 +73,12 @@ if FLAGS.inference_only==False:
         format(best_epoch, FLAGS.eval_metric, new_best, "All best validation results:".upper().ljust(30)), logs=log_file)
     printAndLog(input_to_write=getBestEpochResults(history, best_epoch), logs=log_file, prefix="", length=15)
 if "vitrolife" in FLAGS.dataset_name.lower():                                                           # As only the Vitrolife dataset includes a test set...
+    PN_accuracy = np.divide(np.sum(np.asarray(PN_pred) == np.asarray(PN_true)), len(PN_true))           # Compute the accuracy of computed PNs 
     printAndLog(input_to_write="All test results:".upper().ljust(30), logs=log_file)
     printAndLog(input_to_write=test_history, logs=log_file, prefix="", length=15)
+    test_history["PN_pred"] = PN_pred                                                                   # Assign the list of predicted PNs to the test history
+    test_history["PN_true"] = PN_true                                                                   # Assign the list of true PNs to the test history 
+    printAndLog(input_to_write="The PN counts of the test dataset has an accuracy of {:.3f}".format(PN_accuracy), logs=log_file, postfix="\n")
 
 # Remove all metrics.json files and the default log-file and write config to file, visualize the images and zip output directory
 [os.remove(os.path.join(cfg.OUTPUT_DIR, x)) for x in os.listdir(cfg.OUTPUT_DIR) if "metrics" in x.lower() and x.endswith(".json")]  # Remove all metrics files

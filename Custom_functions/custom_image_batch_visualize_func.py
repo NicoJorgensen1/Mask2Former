@@ -127,16 +127,17 @@ def hungarian_matching(y_pred_dict, data, predictor, matcher, FLAGS, meta_data):
 # Function to compute non max suppression for the predicted object instances 
 def NMS_pred(y_pred_dict, data, meta_data, conf_thresh, IoU_thresh):
     # Read the image and initiate an empty prediction
-    img = torch.permute(data["image"], (1,2,0)).numpy()                                     # Read the true image as a numpy array from the data dictionary 
+    img = torch.permute(data["image"], (1,2,0)).cpu().numpy()                               # Read the true image as a numpy array from the data dictionary 
     y_pred_mask = np.zeros_like(img)                                                        # Initiate the 
     
     # Get the predicted classes, scores and masks
-    pred_classes = y_pred_dict["pred_classes"].numpy()                                      # pred_classes is an array of shape [Q] only containing integer class_id's. For inference only, when no true labels are available
-    pred_scores = y_pred_dict["scores"].numpy()                                             # pred_scores  is an array of shape [Q] containing the class confidence scores from the predictions 
-    pred_masks = y_pred_dict["pred_masks"].numpy()                                          # pred_masks is an array of shape [Q, H, W] of float values
+    pred_classes = y_pred_dict["pred_classes"].cpu().numpy()                                # pred_classes is an array of shape [Q] only containing integer class_id's. For inference only, when no true labels are available
+    pred_scores = y_pred_dict["scores"].cpu().numpy()                                       # pred_scores  is an array of shape [Q] containing the class confidence scores from the predictions 
+    pred_masks = y_pred_dict["pred_masks"].cpu().numpy()                                    # pred_masks is an array of shape [Q, H, W] of float values
 
     # Filter out all masks with a confidence score below threshold
     thres_idx = (pred_scores >= conf_thresh)
+    used_masks, used_lbls = list(), list()
     if thres_idx.sum() >= 1:
         pred_classes = pred_classes[thres_idx]
         pred_scores = pred_scores[thres_idx]
@@ -149,7 +150,6 @@ def NMS_pred(y_pred_dict, data, meta_data, conf_thresh, IoU_thresh):
         pred_masks = pred_masks[conf_idx]
 
         # Iterate through all predictions 
-        used_masks, used_lbls = list(), list()
         for mask, lbl in zip(pred_masks, pred_classes):
             # Append the mask and lbl with the highest confidence scores among the remaining predictions
             IoU_with_used = list()
@@ -162,7 +162,7 @@ def NMS_pred(y_pred_dict, data, meta_data, conf_thresh, IoU_thresh):
             used_masks.append(mask)
             used_lbls.append(lbl)
         y_pred_mask = draw_mask_image(mask_list=used_masks, lbl_list=used_lbls, meta_data=meta_data)
-    return y_pred_mask
+    return y_pred_mask, used_masks 
 
 
 # Define a function to predict some label-masks for the dataset
@@ -205,8 +205,8 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
         if "hungarian" in matching_type.lower():                                            # If we are matching objects using Hungarian algorithm ... 
             y_pred = hungarian_matching(y_pred_dict=y_pred_dict, data=data,                 # ... compute the Hungarian matching ...
                     predictor=predictor, matcher=matcher, FLAGS=FLAGS, meta_data=meta_data) # ... between ground truth and predictions
-        else: y_pred = NMS_pred(y_pred_dict=y_pred_dict, data=data,                         # Else, the matching will be done ...
-                        conf_thresh=0.50, IoU_thresh=0.35, meta_data=meta_data)             # ... using plain non max suppression 
+        else: y_pred,_ = NMS_pred(y_pred_dict=y_pred_dict, data=data, conf_thresh=FLAGS.conf_threshold, # Else, the matching will be done ...
+                IoU_thresh=FLAGS.IoU_threshold, meta_data=meta_data)                        # ... using plain non max suppression 
         
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary

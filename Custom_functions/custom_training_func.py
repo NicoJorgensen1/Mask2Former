@@ -30,6 +30,8 @@ def launch_custom_training(FLAGS, config, dataset, epoch=0, run_mode="train", hy
         if "vitrolife" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 3)    # ... Transformer and ResNet backbones need a ...
         elif "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(FLAGS.epoch_iter * 1/10)  # ... few thousand samples to accomplish anything
     if "val" in run_mode and "ade20k" in FLAGS.dataset_name.lower(): config.SOLVER.MAX_ITER = int(np.ceil(np.divide(FLAGS.epoch_iter, 4)))
+    if "nico" in config.OUTPUT_DIR.lower():                                                                 # If I am working on my own local computer ...
+        config.SOLVER.MAX_ITER = int(np.min([FLAGS.epoch_iter, 15]))                                        # ... the maximum number of iterations is lowered 
     config.SOLVER.CHECKPOINT_PERIOD = config.SOLVER.MAX_ITER                                                # Save a new model checkpoint after each epoch
     if "train" in run_mode and hyperparameter_opt==False:                                                   # If we are training ... 
         for idx, item in enumerate(config.custom_key[::-1]):                                                # Iterate over the custom keys in reversed order
@@ -135,55 +137,55 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
         run_type = "trial" if hyperparameter_optimization else "epoch"                                      # Either we are in a HPO trial or an epoch 
         run_numb = FLAGS.HPO_current_trial+1 if hyperparameter_optimization else epoch+1                    # Get the current trial or the current epoch number 
         total_runs = FLAGS.num_trials if hyperparameter_optimization else FLAGS.num_epochs                  # Get the total number of trials or epochs to run for 
-        try:
-            epoch_start_time = time()                                                                       # Now this new epoch starts
-            if FLAGS.inference_only==False:
-                config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=train_dataset, epoch=epoch, run_mode="train", hyperparameter_opt=hyperparameter_optimization)    # Launch the training loop for one epoch
-                if quit_training: break  
-                eval_train_results, train_loader, train_evaluator = evaluateResults(FLAGS, config, data_split="train", dataloader=train_loader, evaluator=train_evaluator, hp_optim=hyperparameter_optimization) # Evaluate the result on the training set
-            
-            # Validation period. Will 'train' with lr=0 on validation data, correct the metrics files and evaluate performance on validation data
-            config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=val_dataset, epoch=epoch, run_mode="val", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
+    # try:
+        epoch_start_time = time()                                                                       # Now this new epoch starts
+        if FLAGS.inference_only==False:
+            config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=train_dataset, epoch=epoch, run_mode="train", hyperparameter_opt=hyperparameter_optimization)    # Launch the training loop for one epoch
             if quit_training: break  
-            eval_val_results, val_loader, val_evaluator = evaluateResults(FLAGS, config, data_split="val", dataloader=val_loader, evaluator=val_evaluator) # Evaluate the result metrics on the training set
-            config.DATASETS.TRAIN = train_dataset                                                           # Set the training dataset back 
-            
-            # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results
-            history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results["segm"],    # Create and save the learning curves ...
-                        metrics_eval=eval_val_results["segm"], history=history)                             # ... including all training and validation metrics
-            save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
-            [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
-            
-            # Performing callbacks
-            if FLAGS.inference_only==False and hyperparameter_optimization==False: 
-                config = keepAllButLatestAndBestModel(config=config, history=history, FLAGS=FLAGS)          # Keep only the best and the latest model weights. The rest are deleted.
-                if epoch+1 >= FLAGS.patience:                                                               # If the model has trained for more than 'patience' epochs and we aren't debugging ...
-                    config, lr_update_check = lr_scheduler(cfg=config, history=history, FLAGS=FLAGS, lr_updated=lr_update_check)  # ... change the learning rate, if needed
-                    FLAGS.learning_rate = config.SOLVER.BASE_LR                                             # Update the FLAGS.learning_rate value
-                if epoch+1 >= FLAGS.early_stop_patience:                                                    # If the model has trained for more than 'early_stopping_patience' epochs ...
-                    quit_training = early_stopping(history=history, FLAGS=FLAGS)                            # ... perform the early stopping callback
-            earlier_HPO_best = deepcopy(FLAGS.HPO_best_metric)                                              # Read the earlier best HPO value 
-            earlier_train_best = deepcopy(new_best)                                                         # Read the earlier best train value 
-            new_best, best_epoch = updateLogsFunc(log_file=logs, FLAGS=FLAGS, history=history, best_val=new_best,
-                    train_start=train_start_time, epoch_start=epoch_start_time, best_epoch=best_epoch,
-                    cur_epoch=FLAGS.HPO_current_trial if hyperparameter_optimization else epoch)
-            HPO_visualize = True if all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 20]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 45]) else False
-            train_visualize = True if epoch==epoch_next_display or all([new_best <= earlier_train_best, "loss" in FLAGS.eval_metric, new_best <= 20]) or all([new_best >= earlier_train_best, "loss" not in FLAGS.eval_metric, new_best >= 45]) else False 
-            if all([train_visualize, hyperparameter_optimization==False]) or all([hyperparameter_optimization, HPO_visualize]): # At least every 'display_rate' epochs or if the model has improved ...
-                _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
-                epoch_next_display = epoch + FLAGS.display_rate                                             # Increase the counter for when the images must be displayed again
-            if all([quit_training, hyperparameter_optimization==False]):                                    # If the early stopping callback says we need to quit the training ...
-                printAndLog(input_to_write="Committing early stopping at epoch {:d}. The best {:s} is {:.3f} from epoch {:d}".format(epoch+1, FLAGS.eval_metric, new_best, best_epoch), logs=logs)
-                break                                                                                       # break the for loop and stop running more epochs
-        except Exception as ex:
-            error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, run_type, run_numb, total_runs, ex.args)
-            printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
+            eval_train_results, train_loader, train_evaluator,_,_ = evaluateResults(FLAGS, config, data_split="train", dataloader=train_loader, evaluator=train_evaluator, hp_optim=hyperparameter_optimization) # Evaluate the result on the training set
+        
+        # Validation period. Will 'train' with lr=0 on validation data, correct the metrics files and evaluate performance on validation data
+        config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=val_dataset, epoch=epoch, run_mode="val", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
+        if quit_training: break  
+        eval_val_results, val_loader, val_evaluator,_,_ = evaluateResults(FLAGS, config, data_split="val", dataloader=val_loader, evaluator=val_evaluator) # Evaluate the result metrics on the training set
+        config.DATASETS.TRAIN = train_dataset                                                           # Set the training dataset back 
+        
+        # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results
+        history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results["segm"],    # Create and save the learning curves ...
+                    metrics_eval=eval_val_results["segm"], history=history)                             # ... including all training and validation metrics
+        save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
+        [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
+        
+        # Performing callbacks
+        if FLAGS.inference_only==False and hyperparameter_optimization==False: 
+            config = keepAllButLatestAndBestModel(config=config, history=history, FLAGS=FLAGS)          # Keep only the best and the latest model weights. The rest are deleted.
+            if epoch+1 >= FLAGS.patience:                                                               # If the model has trained for more than 'patience' epochs and we aren't debugging ...
+                config, lr_update_check = lr_scheduler(cfg=config, history=history, FLAGS=FLAGS, lr_updated=lr_update_check)  # ... change the learning rate, if needed
+                FLAGS.learning_rate = config.SOLVER.BASE_LR                                             # Update the FLAGS.learning_rate value
+            if epoch+1 >= FLAGS.early_stop_patience:                                                    # If the model has trained for more than 'early_stopping_patience' epochs ...
+                quit_training = early_stopping(history=history, FLAGS=FLAGS)                            # ... perform the early stopping callback
+        earlier_HPO_best = deepcopy(FLAGS.HPO_best_metric)                                              # Read the earlier best HPO value 
+        earlier_train_best = deepcopy(new_best)                                                         # Read the earlier best train value 
+        new_best, best_epoch = updateLogsFunc(log_file=logs, FLAGS=FLAGS, history=history, best_val=new_best,
+                train_start=train_start_time, epoch_start=epoch_start_time, best_epoch=best_epoch,
+                cur_epoch=FLAGS.HPO_current_trial if hyperparameter_optimization else epoch)
+        HPO_visualize = True if all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 20]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 15]) else False
+        train_visualize = True if epoch==epoch_next_display or all([new_best <= earlier_train_best, "loss" in FLAGS.eval_metric, new_best <= 20]) or all([new_best >= earlier_train_best, "loss" not in FLAGS.eval_metric, new_best >= 45]) else False 
+        if all([train_visualize, hyperparameter_optimization==False]) or all([hyperparameter_optimization, HPO_visualize]): # At least every 'display_rate' epochs or if the model has improved ...
+            _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
+            epoch_next_display = epoch + FLAGS.display_rate                                             # Increase the counter for when the images must be displayed again
+        if all([quit_training, hyperparameter_optimization==False]):                                    # If the early stopping callback says we need to quit the training ...
+            printAndLog(input_to_write="Committing early stopping at epoch {:d}. The best {:s} is {:.3f} from epoch {:d}".format(epoch+1, FLAGS.eval_metric, new_best, best_epoch), logs=logs)
+            break                                                                                       # break the for loop and stop running more epochs
+    # except Exception as ex:
+    #     error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, run_type, run_numb, total_runs, ex.args)
+    #     printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
 
     # Evaluation on the vitrolife test dataset. There is no ADE20K-test dataset.
     test_history = {}                                                                                       # Initialize the test_history dictionary as an empty dictionary
     if all([FLAGS.debugging == False, "vitrolife" in FLAGS.dataset_name.lower(), hyperparameter_optimization==False]):  # Inference will only be performed when training the Vitrolife model
         config.DATASETS.TEST = ("vitrolife_dataset_test",)                                                  # The inference will be done on the test dataset
-        eval_test_results,_,_ = evaluateResults(FLAGS, config, data_split="test")                           # Evaluate the result metrics on the validation set with the best performing model
+        eval_test_results,_,_,PN_pred_count,PN_true_count = evaluateResults(FLAGS, config, data_split="test")   # Evaluate the result metrics on the validation set with the best performing model
         history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_test_results["segm"], data_split="test")
         for key in history_test.keys():                                                                     # Iterate over all the keys in the history dictionary
             if "test" in key: test_history[key] = history_test[key][-1]                                     # If "test" is in the key, assign the value to the test_dictionary 
@@ -193,5 +195,5 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
 
     # Return the results
     if hyperparameter_optimization: return new_best
-    else: return history, test_history, new_best, best_epoch, config
+    else: return history, test_history, new_best, best_epoch, config, PN_pred_count, PN_true_count
     

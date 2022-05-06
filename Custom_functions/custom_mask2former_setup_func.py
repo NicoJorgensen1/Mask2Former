@@ -147,12 +147,15 @@ FLAGS.batch_size = np.min([FLAGS.batch_size, FLAGS.num_train_files])            
 FLAGS.epoch_iter = int(np.floor(np.divide(FLAGS.num_train_files, FLAGS.batch_size)))    # Compute the number of iterations per training epoch
 FLAGS.num_classes = len(MetadataCatalog[cfg.DATASETS.TRAIN[0]].thing_classes)           # Get the number of classes in the current dataset
 FLAGS.available_mem_info = available_mem_info.tolist()                                  # Save the information of available GPU memory in the FLAGS variable
+FLAGS.conf_threshold = 0.50                                                             # The minimum confidence score a prediction needs in order to be treated as a "positive" prediction
+FLAGS.IoU_threshold = 0.30                                                              # The maximum overlap between two prediction masks before assuming they are different objects 
 cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                                      # Set the final values for the config
 
 # Change FLAGS num trials and epochs if on my local computer
 if "nico" in cfg.OUTPUT_DIR.lower():
     FLAGS.num_trials = 2
     FLAGS.num_epochs = 2
+    FLAGS.hp_optim = False 
 
 # Create the log file
 log_file = os.path.join(cfg.OUTPUT_DIR, "Training_logs.txt")                            # Initiate the log filename

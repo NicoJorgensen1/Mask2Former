@@ -10,6 +10,7 @@ from mask2former import MaskFormerInstanceDatasetMapper
 from mask2former import InstanceSegEvaluator
 from detectron2.data import build_detection_test_loader
 from detectron2.data import MetadataCatalog
+from custom_image_batch_visualize_func import NMS_pred
 
 
 # Define a function to change a certain value in a numpy array into another value
@@ -27,7 +28,8 @@ def changeValue(inp, origVal=-1, newVal=0):                                     
 def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluator=None, hp_optim=False):
     # Get the correct properties
     dataset_name = cfg.DATASETS.TRAIN[0] if "train" in data_split.lower() else cfg.DATASETS.TEST[0]             # Get the name of the dataset that will be evaluated
-    total_runs = MetadataCatalog.get(dataset_name).num_files_in_dataset                                         # Get the number of files in the chosen dataset
+    meta_data = MetadataCatalog.get(dataset_name)                                                               # Get the metadata of the current dataset 
+    total_runs = meta_data.num_files_in_dataset                                                                 # Get the number of files in the chosen dataset
     if "train" in data_split and hp_optim==True: total_runs = 10                                                # If we are performing hyperparameter optimization, only 10 train samples will be evaluated
     if "ade20k" in FLAGS.dataset_name.lower() and hp_optim: total_runs = int(np.ceil(np.divide(total_runs, 4))) # If we are on the ADE20k dataset, then only 1/4 of the dataset will be evaluated during HPO
 
@@ -39,7 +41,7 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluator=N
         dataloader = build_detection_test_loader(cfg=cfg, dataset_name=dataset_name,                            # Create the dataloader ...
             batch_size=1, mapper=MaskFormerInstanceDatasetMapper(cfg=cfg, is_train=True, augmentations=[]), num_workers=1)     # ... with the default mapper and no augmentation 
     if evaluator is None:                                                                                       # If there is no evaluator ...
-        try: del MetadataCatalog.get(dataset_name).json_file                                                    # ... then the json_file attribute of the MetadataCatalog is removed
+        try: del meta_data.json_file                                                                            # ... then the json_file attribute of the MetadataCatalog is removed
         except: pass
         evaluator = InstanceSegEvaluator(dataset_name=dataset_name, output_dir=pred_out_dir, allow_cached_coco=False)   # Build the evaluator instance
     evaluator.reset()                                                                                           # Reset the evaluator metrics 
@@ -51,6 +53,7 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluator=N
     predictor = DefaultPredictor(config_2)                                                                      # Create an instance of the default predictor 
 
     # Create a progress bar to keep track on the evaluation
+    PN_pred_count, PN_true_count = list(), list()                                                               # Initiate lists 
     with tqdm(total=total_runs, iterable=None, postfix="Evaluating the {:s} dataset".format(data_split), unit="img",  position=0,
             file=sys.stdout, desc="Image {:d}/{:d}".format(1, total_runs), colour="green", leave=True, ascii=True, 
             bar_format="{desc}  | {percentage:3.0f}% | {bar:35}| {n_fmt}/{total_fmt} | [Spent: {elapsed}. Remaining: {remaining} | {postfix}]") as tepoch:
@@ -59,7 +62,13 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluator=N
             outputs = list()                                                                                    # Initiate lists to store the predicted arrays and the ground truth tensors
             for data in data_batch:                                                                             # Iterate over all dataset dictionaries in the list
                 img = torch.permute(data["image"], (1,2,0)).numpy()                                             # Make input image numpy format and [H,W,C]
-                outputs.append(predictor.__call__(img))                                                         # Append the current prediction for the input image to the list of outputs
+                y_pred = predictor.__call__(img)                                                                # Compute the predicted output
+                outputs.append(y_pred)                                                                          # Append the current prediction for the input image to the list of outputs
+                if "vitrolife" in dataset_name.lower() and "test" in data_split.lower():
+                    y_pred = y_pred["instances"].get_fields()
+                    PN_masks = NMS_pred(y_pred_dict=y_pred, data=data, meta_data=meta_data, conf_thresh=FLAGS.conf_threshold, IoU_thresh=FLAGS.IoU_threshold) 
+                    PN_pred_count.append(int(len(PN_masks)))
+                    PN_true_count.append(int(data["image_custom_info"]["PN_image"]))
             evaluator.process(inputs=[data], outputs=outputs)                                                   # Process the results by adding the results to the confusion matrix
             tepoch.desc = "Image {:d}/{:d} ".format(kk+1, total_runs)                                           # Update the description of the progress bar
             tepoch.update(1)                                                                                    # Update progress bar 
@@ -91,4 +100,4 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluator=N
             eval_results[task_key]["precision_IoU50_"+class_lbl] = np.mean(a=eval_results[task_key]["precision"][0,:,class_id,:,1], axis=1) # The precision for the given class with IoU@50, all recall values, all object sizes and 10 detections pr image 
 
     # Return the metrics
-    return eval_results, dataloader, evaluator
+    return eval_results, dataloader, evaluator, PN_pred_count, PN_true_count
