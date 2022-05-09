@@ -166,12 +166,14 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                 quit_training = early_stopping(history=history, FLAGS=FLAGS)                            # ... perform the early stopping callback
         earlier_HPO_best = deepcopy(FLAGS.HPO_best_metric)                                              # Read the earlier best HPO value 
         earlier_train_best = deepcopy(new_best)                                                         # Read the earlier best train value 
+        used_best_val = earlier_HPO_best if hyperparameter_optimization else earlier_train_best         # If we are performing HPO, use the best HPO_metric as baseline, else best training metric 
         new_best, best_epoch = updateLogsFunc(log_file=logs, FLAGS=FLAGS, history=history, best_val=new_best,
                 train_start=train_start_time, epoch_start=epoch_start_time, best_epoch=best_epoch,
                 cur_epoch=FLAGS.HPO_current_trial if hyperparameter_optimization else epoch)
-        HPO_visualize = True if all([new_best <= earlier_HPO_best, "loss" in FLAGS.eval_metric, new_best <= 20]) or all([new_best >= earlier_HPO_best, "loss" not in FLAGS.eval_metric, new_best >= 15]) else False
-        train_visualize = True if epoch==epoch_next_display or all([new_best <= earlier_train_best, "loss" in FLAGS.eval_metric, new_best <= 20]) or all([new_best >= earlier_train_best, "loss" not in FLAGS.eval_metric, new_best >= 45]) else False 
-        if all([train_visualize, hyperparameter_optimization==False]) or all([hyperparameter_optimization, HPO_visualize]): # At least every 'display_rate' epochs or if the model has improved ...
+        metrics_has_improved = all(["loss" in FLAGS.eval_metric, new_best < used_best_val]) or all(["loss" not in FLAGS.eval_metric, new_best > used_best_val])
+        HPO_visualize = True if metrics_has_improved and hyperparameter_optimization else False
+        train_visualize = True if epoch==epoch_next_display or all([metrics_has_improved, hyperparameter_optimization==False]) else False
+        if HPO_visualize or train_visualize:                                                            # At least every 'display_rate' epochs or if the model has improved ...
             _,data_batches,config,FLAGS = visualize_the_images(config=config, FLAGS=FLAGS, data_batches=data_batches, epoch_num=epoch+1)  # ... the model will segment and save visualizations
             epoch_next_display = epoch + FLAGS.display_rate                                             # Increase the counter for when the images must be displayed again
         if all([quit_training, hyperparameter_optimization==False]):                                    # If the early stopping callback says we need to quit the training ...
