@@ -1,5 +1,6 @@
 # Import libraries
-import os                                                                               # Used to navigate the folder structure in the current os
+import os
+from turtle import st                                                                               # Used to navigate the folder structure in the current os
 import numpy as np                                                                      # Used for computing the iterations per epoch
 import argparse                                                                         # Used to parse input arguments through command line
 import pickle                                                                           # Used to save the history dictionary after training
@@ -84,6 +85,12 @@ def changeFLAGS(FLAGS):
     FLAGS.HPO_best_metric = np.inf if "loss" in FLAGS.eval_metric.lower() else -np.inf  # Create variable to keep track of the best results obtained when performing HPO
     FLAGS.quit_training = False                                                         # The initial value for the "quit_training" parameter should be False
     FLAGS.ignore_label = 0 if FLAGS.ignore_background else 255                          # As default no labels will be ignored 
+    segmentations_used = list()                                                         # Initiate a list to store the available segmentations 
+    if any(["semantic" in x.lower() for x in FLAGS.segmentation]): segmentations_used.append("Semantic")    # If the user chose to perform semantic segmentation, add that to the list of performed segmentations
+    if any(["instance" in x.lower() for x in FLAGS.segmentation]): segmentations_used.append("Instance")    # If the user chose to perform instance segmentation, add that to the list of performed segmentations
+    if any(["panoptic" in x.lower() for x in FLAGS.segmentation]): segmentations_used.append("Panoptic")    # If the user chose to perform panoptic segmentation, add that to the list of performed segmentations
+    if len(segmentations_used) == 0: segmentations_used = ["Panoptic"]                  # If no segmentation was chosen, the default is panoptic segmentation
+    FLAGS.segmentation = segmentations_used                                             # Add the list of chosen augmentations to the FLAGS Namespace 
     return FLAGS
 
 
@@ -94,6 +101,7 @@ parser.add_argument("--dataset_name", type=str, default="vitrolife", help="Which
 parser.add_argument("--output_dir_postfix", type=str, default=start_time, help="Filename extension to add to the output directory of the current process. Default: now: 'HH_MM_DDMMMYYYY'")
 parser.add_argument("--eval_metric", type=str, default="val_AP", help="Metric to use in order to determine the 'best' model weights. Default: val_AP")
 parser.add_argument("--optimizer_used", type=str, default="ADAMW", help="Optimizer to use. Available [SGD, ADAMW]. Default: ADAMW")
+parser.add_argument("--segmentation", type=str, default="instance", nargs="*", help="The type of segmentation used for this running. Valid arguments [Semantic, Instance, Panoptic]. Default: Panoptic")
 parser.add_argument("--num_workers", type=int, default=1, help="Number of workers to use for. Default: 2")
 parser.add_argument("--max_iter", type=int, default=int(1e5), help="Maximum number of iterations to train the model for. <<Deprecated argument. Use 'num_epochs' instead>>. Default: 100000")
 parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of the feature extracting ResNet backbone. Possible values: [18,34,50,101] Default: 101")
@@ -113,9 +121,9 @@ parser.add_argument("--dice_loss_weight", type=int, default=10, help="The weight
 parser.add_argument("--mask_loss_weight", type=int, default=10, help="The weighting for the mask loss in the loss function. Default: 10")
 parser.add_argument("--class_loss_weight", type=int, default=3, help="The weighting for the classification loss in the loss function. Default: 3")
 parser.add_argument("--no_object_weight", type=float, default=0.1, help="The weighting for the 'no object' category in the loss function. Default: 0.1")
-parser.add_argument("--learning_rate", type=float, default=1e-5, help="The initial learning rate used for training the model. Default: 1e-5")
+parser.add_argument("--learning_rate", type=float, default=1e-6, help="The initial learning rate used for training the model. Default: 1e-5")
 parser.add_argument("--lr_gamma", type=float, default=0.15, help="The update factor for the learning rate when the model performance hasn't improved in 'patience' epochs. Will do new_lr=old_lr*lr_gamma. Default 0.15")
-parser.add_argument("--backbone_multiplier", type=float, default=0.15, help="The multiplier for the backbone learning rate. Backbone_lr = learning_rate * backbone_multiplier. Default: 0.15")
+parser.add_argument("--backbone_multiplier", type=float, default=0.10, help="The multiplier for the backbone learning rate. Backbone_lr = learning_rate * backbone_multiplier. Default: 0.15")
 parser.add_argument("--weight_decay", type=float, default=1e-4, help="The weight decay used for the model. Default: 1e-4")
 parser.add_argument("--min_delta", type=float, default=5e-4, help="The minimum improvement the model must have made in order to be accepted as an actual improvement. Default 5e-4")
 parser.add_argument("--ignore_background", type=str2bool, default=False, help="Whether or not we are ignoring the background class. True = Ignore background, False = reward/penalize for background predictions. Default: False")
@@ -155,7 +163,7 @@ cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                              
 if "nico" in cfg.OUTPUT_DIR.lower():
     FLAGS.num_trials = 2
     FLAGS.num_epochs = 2
-    FLAGS.hp_optim = False 
+    FLAGS.hp_optim = True 
 
 # Create the log file
 log_file = os.path.join(cfg.OUTPUT_DIR, "Training_logs.txt")                            # Initiate the log filename

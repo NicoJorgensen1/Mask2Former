@@ -10,3 +10,4 @@ optuna
 opencv-python
 pandas
 sklearn 
+ninja 

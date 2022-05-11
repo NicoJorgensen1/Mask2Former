@@ -7,11 +7,6 @@ from detectron2.projects.deeplab import add_deeplab_config                      
 from mask2former import add_maskformer2_config                                                      # Used to add the new configuration to the list of possible configurations
 
 
-# Locate the folder containing other configurations
-Mask2Former_dir = [x for x in sys_PATH if x.endswith("Mask2Former")][0]                             # Get the path of the Mask2Former directory
-config_folder = os.path.join(Mask2Former_dir, "configs", "ade20k", "instance-segmentation")         # Get the path of the configs
-
-
 # Define function to get all keys in a nested dictionary
 def accumulate_keys(dct):
     key_list = list()
@@ -25,6 +20,11 @@ def accumulate_keys(dct):
 
 # Define a function to create a custom configuration in the chosen config_dir and takes a namespace option
 def createVitrolifeConfiguration(FLAGS):
+    Mask2Former_dir = [x for x in sys_PATH if x.endswith("Mask2Former")][0]                         # Get the path of the Mask2Former directory
+    if "Semantic" in FLAGS.segmentation: segmentation_type = "semantic"
+    if "Instance" in FLAGS.segmentation: segmentation_type = "instance"
+    if "Panoptic" in FLAGS.segmentation: segmentation_type = "panoptic"
+    config_folder = os.path.join(Mask2Former_dir, "configs", "ade20k", segmentation_type+"-segmentation")   # Get the path of the ade20k configs 
     cfg = get_cfg()
     add_deeplab_config(cfg)
     add_maskformer2_config(cfg)
@@ -34,15 +34,15 @@ def createVitrolifeConfiguration(FLAGS):
         cfg.merge_from_file(os.path.join(config_folder, "swin", swin_config))                       # Merge the configuration with the swin configuration
     else:                                                                                           # If we are not using the swin backbone ...
         cfg.merge_from_file(os.path.join(config_folder, "maskformer2_R50_bs16_160k.yaml"))          # ... instead merge with the ResNet config 
-    cfg.merge_from_file(os.path.join(config_folder, "Base-ADE20K-InstanceSegmentation.yaml"))       # Merge with the base config for ade20K dataset. This is the config selecting that we use the ADE20K dataset)
+    cfg.merge_from_file(os.path.join(config_folder, "Base-ADE20K-{}Segmentation.yaml".format(segmentation_type.capitalize())))  # Merge with the base config for ade20K dataset. This is the config selecting that we use the ADE20K dataset
 
     if "vitrolife" in FLAGS.dataset_name.lower():                                                   # If we are working on the Vitrolife dataset ... 
         cfg["DATASETS"]["TRAIN"] = ("vitrolife_dataset_train",)                                     # ... define the training dataset by using the config as a dictionary
         cfg.DATASETS.TEST = ("vitrolife_dataset_val",)                                              # ... define the validation dataset by using the config as a CfgNode 
 
-    cfg.MODEL.MASK_FORMER.TEST.SEMANTIC_ON = False                                                  # The Sem_Seg head will be off
-    cfg.MODEL.MASK_FORMER.TEST.INSTANCE_ON = True                                                   # The Instance Seg head will be on
-    cfg.MODEL.MASK_FORMER.TEST.PANOPTIC_ON = False                                                  # The Panoptic Seg head will be off 
+    cfg.MODEL.MASK_FORMER.TEST.SEMANTIC_ON = "Semantic" in FLAGS.segmentation                       # Whether or not the semantic segmentation head will be turned on
+    cfg.MODEL.MASK_FORMER.TEST.INSTANCE_ON = "Instance" in FLAGS.segmentation                       # Whether or not the instance segmentation head will be turned on
+    cfg.MODEL.MASK_FORMER.TEST.PANOPTIC_ON = "Panoptic" in FLAGS.segmentation                       # Whether or not the panoptic segmentation head will be turned on
     return cfg
 
 
@@ -52,6 +52,7 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     cfg.MODEL.RESNETS.DEPTH = FLAGS.resnet_depth                                                    # The depth of the ResNet backbone (if used)
     cfg.MODEL.BACKBONE.FREEZE_AT = FLAGS.backbone_freeze_layers                                     # How many sections of a pretrained backbone that must be freezed
     cfg.MODEL.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'                               # Assign the device on which the model should run
+    cfg.MODEL.WEIGHTS = ""                                                                          # Initialize the model with random model weights 
     cfg.MODEL.MASK_FORMER.DICE_WEIGHT = FLAGS.dice_loss_weight                                      # Set the weight for the dice loss (original 2)
     cfg.MODEL.MASK_FORMER.MASK_WEIGHT = FLAGS.mask_loss_weight                                      # Set the weight for the mask predictive loss (original 20)
     cfg.MODEL.MASK_FORMER.CLASS_WEIGHT = FLAGS.class_loss_weight                                    # Set the weight for the class weight loss 
@@ -60,14 +61,16 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     cfg.MODEL.MASK_FORMER.TEST.PANOPTIC_ON = False                                                  # Disable the panoptic head for the maskformer 
     cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES = FLAGS.num_queries                                    # The number of queries to detect from the Transformer module 
     cfg.MODEL.MASK_FORMER.SIZE_DIVISIBILITY = 10                                                    # The size of the images will be padded to be in an equal division of 10 
+    cfg.MODEL.MASK_FORMER.TEST.SEM_SEG_POSTPROCESSING_BEFORE_INFERENCE = True                       # Always make semantic segmentation predictions on downsampled data, and then resize afterwards 
     cfg.MODEL.PANOPTIC_FPN.COMBINE.ENABLED = False                                                  # Always disable the panoptic FPN head 
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512                                                  # The ROI head proposals per image 
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.50                                                    # Assign the IoU threshold used for the model
+    cfg.MODEL.RETINANET.NUM_CLASSES = len(MetadataCatalog.get("vitrolife_dataset_test").thing_classes)  # Assign the length of the thing_classes list as the number of classes
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = cfg.MODEL.RETINANET.NUM_CLASSES                               # Set the number of classes for the ROI prediction head 
+    cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES = cfg.MODEL.ROI_HEADS.NUM_CLASSES                            # Set the number of classes for the sem_seg_head (that is unused when only doing instance segmentation)
     if "vitrolife" in FLAGS.dataset_name.lower(): 
         cfg.MODEL.PIXEL_MEAN = [100.15, 102.03, 103.89]                                             # Write the correct image mean value for the entire vitrolife dataset
         cfg.MODEL.PIXEL_STD = [57.32, 59.69, 61.93]                                                 # Write the correct image standard deviation value for the entire vitrolife dataset
-        cfg.MODEL.ROI_HEADS.NUM_CLASSES = len(MetadataCatalog.get("vitrolife_dataset_test").thing_classes)  # Assign the length of the thing_classes list as the number of classes
-        cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES = cfg.MODEL.ROI_HEADS.NUM_CLASSES                        # Set the number of classes for the sem_seg_head (that is unused when only doing instance segmentation)
 
     # Solver values
     cfg.SOLVER.IMS_PER_BATCH = int(FLAGS.batch_size)                                                # Batch size used when training => batch_size pr GPU = batch_size // num_gpus
@@ -101,6 +104,7 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     cfg.INPUT.MIN_SIZE_TRAIN_SAMPLING = "choice"                                                    # Random sampling of the input images 
 
     # Output values
+    Mask2Former_dir = [x for x in sys_PATH if x.endswith("Mask2Former")][0]                         # Get the path of the Mask2Former directory
     cfg.OUTPUT_DIR = os.path.join(Mask2Former_dir, "output_{:s}{:s}".format("vitrolife_" if "vitro" in FLAGS.dataset_name.lower() else "", FLAGS.output_dir_postfix))   # Get Mask2Former directory and name the output directory
     os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)                                                      # Create the output folder, if it doesn't already exist
 

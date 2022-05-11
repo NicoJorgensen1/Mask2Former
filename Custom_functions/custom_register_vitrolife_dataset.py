@@ -5,6 +5,7 @@ import time
 import pycocotools
 import pandas as pd
 import numpy as np
+from PIL import Image 
 from natsort import natsorted
 from copy import deepcopy
 from tqdm import tqdm
@@ -13,8 +14,9 @@ from detectron2.structures import BoxMode
 from detectron2.utils.visualizer import Visualizer
 
 # Create dictionary to store the class names and IDs 
-# class_labels = {kk: val for kk,val in enumerate(["Well", "Zona", "Perivitelline space", "Cell", "PN"])}
-class_labels = {kk: val for kk, val in enumerate(["PN"])}
+stuff_class_labels = {kk: val for kk,val in enumerate(["Background", "Well", "Zona", "Perivitelline space", "Cell"])}
+thing_class_labels = {kk: val for kk, val in enumerate(["PN"])}
+panoptic_class_labels = {kk: val for kk, val in enumerate(["Background", "Well", "Zona", "Perivitelline space", "Cell", "PN"])}
 
 # Function to select sample dictionaries with unique PN's
 def pickSamplesWithUniquePN(dataset_dict):
@@ -29,9 +31,11 @@ def pickSamplesWithUniquePN(dataset_dict):
     return data_used
 
 
-# run_mode = "val"
+# run_mode = "test"
 # debugging = False 
 # visualize = False 
+# vitrolife_dataset_filepath = os.path.join(os.getenv("DETECTRON2_DATASETS"), "Vitrolife_dataset")
+# img_filename = natsorted([x for x in os.listdir(os.path.join(vitrolife_dataset_filepath, "raw_images")) if x.endswith(".jpg")])[0]
 
 
 # Define the function to return the list of dictionaries with information regarding all images available in the vitrolife dataset
@@ -62,9 +66,22 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
         data_split = row["split"]                                                                   # Find the split for the current image, i.e. either train, val or test
         if data_split != run_mode: continue                                                         # If the current image is supposed to be in another split, then continue to the next image
         row["img_file"] = os.path.join(vitrolife_dataset_filepath, "raw_images", img_filename)      # Add the current filename for the input image to the row-variable
-        annotation_dict_filenames = [x for x in os.listdir(os.path.join(vitrolife_dataset_filepath, 'annotations_masks')) if img_filename_wo_ext in x and x.endswith(".pkl")]   # Find the corresponding annotation mask filename
+
+        sem_seg_mask_filename_list = [x for x in os.listdir(os.path.join(vitrolife_dataset_filepath,# Find the corresponding ...
+                'annotations_semantic_masks')) if img_filename_wo_ext in x and x.endswith(".png")]  # ... semantic mask filename
+        if len(sem_seg_mask_filename_list) != 1: continue                                           # If either zero masks or more than one mask is found, skip the current image 
+        sem_seg_mask_filename = os.path.join(vitrolife_dataset_filepath,                            # Get the mask filename used for ...
+                "annotations_semantic_masks", sem_seg_mask_filename_list[0])                        # ... semantic segmentation as a string 
+        panoptic_mask_filename_list = [x for x in os.listdir(os.path.join(vitrolife_dataset_filepath,   # Find the corresponding ...
+                'annotations_panoptic_masks')) if img_filename_wo_ext in x and x.endswith(".png")]  # ... panoptic mask filename
+        if len(panoptic_mask_filename_list) != 1: continue                                          # If we haven't found one and only one panoptic image file, then skip this image ... 
+        panoptic_mask_filename = os.path.join(vitrolife_dataset_filepath,                           # Read the filename ...
+                "annotations_panoptic_masks", panoptic_mask_filename_list[0])                       # ... for the panoptic mask 
+        annotation_dict_filenames = [x for x in os.listdir(os.path.join(vitrolife_dataset_filepath, # Find the corresponding ...
+                'annotations_instance_dicts')) if img_filename_wo_ext in x and x.endswith(".pkl")]  # ... annotation dictionary filename
         if len(annotation_dict_filenames) != 1: continue                                            # Continue only if we find only one dict filename
-        annotation_dict_filename = os.path.join(vitrolife_dataset_filepath, 'annotations_masks', annotation_dict_filenames[0])  # Read the annotation mask filename
+        annotation_dict_filename = os.path.join(vitrolife_dataset_filepath,                         # Read the annotation ...
+                'annotations_instance_dicts', annotation_dict_filenames[0])                         # ... dictionary filename
         with open(annotation_dict_filename, "rb") as anno_file:                                     # Open a file handler for the current annotation pickle file
             annotation_dict_file = pickle.load(anno_file)                                           # Read the current annotation pickle file 
         
@@ -96,7 +113,7 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
             obj = dict()                                                                            # Each instance on the image must be in the format of a dictionary
             obj["bbox"] = bbox                                                                      # Get the bounding box for the current object
             obj["bbox_mode"] = BoxMode.XYXY_ABS                                                     # The mode of the bounding box
-            obj["category_id"] = np.asarray(list(class_labels.keys()))[[bool(x in key) for x in list(class_labels.values())]].item()    # Get the category_ID from the key-value pair of the class_labels dictionary
+            obj["category_id"] = np.asarray(list(thing_class_labels.keys()))[[bool(x in key) for x in list(thing_class_labels.values())]].item()  # Get the category_ID from the key-value pair of the class_labels dictionary
             obj["segmentation"] = pycocotools.mask.encode(np.asarray(mask, order="F"))              # Convert the mask into a COCO compressed RLE dictionary
             obj["iscrowd"] = 0                                                                      # No object instances are labeled as COCO crowd-regions 
             annotations.append(obj)                                                                 # Append the current object instance to the annotations list
@@ -112,22 +129,36 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
                 cv2.namedWindow(winname)                                                            # Create a figure with the chosen name 
                 cv2.moveWindow(winname, 50,50)                                                      # Move the upper left corner to this pixel position
                 cv2.imshow(winname, im_to_show)                                                     # Display the image
-                cv2.waitKey(0)
-                time.sleep(0.5)
-        if visualize:
-            cv2.destroyAllWindows() 
+                cv2.waitKey(0)                                                                      # Set the waitkey to 0 => necessary in order to display images 
+                time.sleep(0.5)                                                                     # Sleep for 0.5 seconds 
+        if visualize:                                                                               # If the user chose to visualize the images ...
+            cv2.destroyAllWindows()                                                                 # ... when all images have been visualized, the windows will be closed 
+        
+        # Get the panoptic segmentation information
+        segments_info = list()                                                                      # Initiate the list to store the panoptic segmentation information dictionaries 
+        panoptic_mask = np.asarray(Image.open(panoptic_mask_filename))                              # Load the panoptic mask
+        unique_values = np.unique(panoptic_mask).tolist()                                           # Read the unique values of the mask
+        for unique_value in unique_values:                                                          # Iterate through all unique mask values 
+            panoptic_obj = dict()                                                                   # Initiate a dict for each of the unqiue values in the panoptic mask 
+            panoptic_obj["id"] = unique_value                                                       # The object id will be equal to the current value 
+            panoptic_obj["category_id"] = np.min([unique_value, np.max(list(panoptic_class_labels.keys()))])    # The category_id (class_id) is either the unique value or the value of a PN
+            panoptic_obj["iscrowd"] = 0                                                             # No classes are set to be "iscrowd" in the vitrolife dataset
+            segments_info.append(panoptic_obj)                                                      # Append the dictionary to the segments_info list 
+        
         # Create the current image/mask pair 
         current_pair = {"file_name": row["img_file"],                                               # Initiate the dict of the current image with the full filepath + filename
                         "height": mask.shape[0],                                                    # Write the image height
                         "width": mask.shape[1],                                                     # Write the image width
                         "image_id": img_filename_wo_ext,                                            # A unique key for the current image
+                        "sem_seg_file_name": sem_seg_mask_filename,                                 # Add the filename for the semantic segmentation mask 
                         "annotations": annotations,                                                 # The list containing the annotations for the current image 
-                        "annotation_mask_file_name": annotation_dict_filename,                      # Add the instance annotation mask image to the dataset list of dictionaries 
+                        "pan_seg_file_name": panoptic_mask_filename,                                # The full path for the panoptic ground truth mask file 
+                        "segments_info": segments_info,                                             # The list of dicts for defining the meaning of each id in the panoptic segmentation ground truth image 
                         "image_custom_info": row}                                                   # Add all the info from the current row to the dataset
         img_mask_pair_list.append(current_pair)                                                     # Append the dictionary for the current pair to the list of images for the given dataset
         count += 1                                                                                  # Increase the sample counter 
         if "nico" in vitrolife_dataset_filepath.lower():                                            # If we are working on my local computer ...
-            if count > 13:                                                                          # ... and 25 images have already been loaded ...
+            if count > 50:                                                                          # ... and 15 images have already been loaded ...
                 break                                                                               # ... then that is enough, thus quit reading the rest of the images 
     assert len(img_mask_pair_list) >= 1, print("No image/mask pairs found in {:s} subfolders 'raw_image' and 'masks'".format(vitrolife_dataset_filepath))
     img_mask_pair_list = natsorted(img_mask_pair_list)                                              # Sorting the list assures the same every time this function runs
@@ -139,12 +170,18 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
 def register_vitrolife_data_and_metadata_func(debugging=False):
     thing_colors = [(185,220,255), (255,185,220), (220,255,185), (185,255,0),                       # Set colors for the ...
                     (0,185,220), (220,0,185), (115,45,115), (45,115,45)]                            # ... different numbers of PNs 
-    thing_id = {kk: key for kk,key in enumerate(list(class_labels.keys()))}                         # Get a dictionary of continuous keys
+    thing_id = {kk: key for kk,key in enumerate(list(thing_class_labels.keys()))}                   # Get a dictionary of continuous keys
+    stuff_colors = [(0,0,0), (255,0,0), (0,255,0), (0,0,255), (255,255,0)]                          # Set random colors for when the images will be visualized
+    stuff_id = {kk: key for kk,key in enumerate(range(len(stuff_class_labels.keys())))}             # Create a dictionary with the class_id's as both keys and values
     for split_mode in ["train", "val", "test"]:                                                     # Iterate over the three dataset splits ... 
         DatasetCatalog.register("vitrolife_dataset_{:s}".format(split_mode), lambda split_mode=split_mode: vitrolife_dataset_function(run_mode=split_mode, debugging=debugging))    # Register the dataset
-        MetadataCatalog.get("vitrolife_dataset_{:s}".format(split_mode)).set(thing_classes=list(class_labels.values()),     # Name the thing classes
-                                                                            thing_colors=thing_colors,                      # Color the thing classes
-                                                                            thing_dataset_id_to_contiguous_id=thing_id,     # Give ID's to the thing classes
+        MetadataCatalog.get("vitrolife_dataset_{:s}".format(split_mode)).set(thing_classes=list(thing_class_labels.values()),   # Name the thing classes
+                                                                            thing_colors=thing_colors,                          # Color the thing classes
+                                                                            thing_dataset_id_to_contiguous_id=thing_id,         # Give ID's to the thing classes
+                                                                            stuff_classes=list(stuff_class_labels.values()),    # Get the semantic stuff classes
+                                                                            stuff_colors = stuff_colors,                        # Set the metadata stuff_colors for visualization
+                                                                            stuff_dataset_id_to_contiguous_id=stuff_id,         # Give the ID to the stuff classes 
+                                                                            ignore_label=255,                                   # No labels will be ignored as 255 >> num_classes ...
                                                                             num_files_in_dataset=len(DatasetCatalog["vitrolife_dataset_{:}".format(split_mode)]())) # Write the length of the dataset
     assert any(["vitrolife" in x for x in list(MetadataCatalog)]), "Datasets have not been registered correctly"    # Assuring the dataset has been registered correctly
 
@@ -160,7 +197,8 @@ def register_vitrolife_data_and_metadata_func(debugging=False):
 # except Exception as ex:
 #     error_string = "An exception of type {0} occured while trying to register the datasets. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
 # vitro_metadata = MetadataCatalog.get("vitrolife_dataset_test")
-# for kk, d in enumerate(test_dataset):
+# visualize_dataset = img_mask_list_test = vitrolife_dataset_function(run_mode="test", debugging=True, visualize=False)
+# for kk, d in enumerate(visualize_dataset):
 #     img = cv2.imread(d["file_name"])
 #     visualizer = Visualizer(img[:, :, ::-1], metadata=vitro_metadata, scale=0.5)
 #     out = visualizer.draw_dataset_dict(d)
@@ -177,5 +215,5 @@ def register_vitrolife_data_and_metadata_func(debugging=False):
 #     time.sleep(1)
 #     cv2.destroyAllWindows() 
 #     time.sleep(0.01)
-#     if kk >= 15:
+#     if kk >= 10:
 #         break 
