@@ -72,10 +72,14 @@ def write_config_to_file(config):
 # Alter the FLAGS input arguments
 def changeFLAGS(FLAGS):
     if FLAGS.num_gpus != FLAGS.gpus_used: FLAGS.num_gpus = FLAGS.gpus_used              # As there are two input arguments where the number of GPUs can be assigned, the gpus_used argument is superior
-    if "ade" in FLAGS.dataset_name.lower(): FLAGS.dataset_name = "ade20k"               # If working with ade20k, then the dataset name must match. Set it here to assure it is always the same, no matter the user input 
+    if "ade" in FLAGS.dataset_name.lower():                                             # If working with ade20k, then the dataset name must match ...
+        FLAGS.dataset_name = "ade20k"                                                   # ... set it here to assure it is always the same, no matter the user input 
+        FLAGS.num_classes = 150                                                         # There are 150 classes in the ADE20K dataset 
     if "vitro" in FLAGS.dataset_name.lower():                                           # Working with the Vitrolife dataset ...
         FLAGS.num_gpus = 1                                                              # ... can only be done using a single GPU for some weird reason...
         FLAGS.dataset_name = "vitrolife"                                                # ... setting the correct vitrolife dataset name
+        if "Instance" in FLAGS.segmentation: FLAGS.num_classes = 1                      # If working with instance segmentation and Vitrolife, only class PN is a 'thing' class
+        else: FLAGS.num_classes = 6                                                     # For semantic and panoptic segmentation, we have [Background, Well, Zona, PV Space, Cell, PN]
     if FLAGS.eval_only != FLAGS.inference_only: FLAGS.eval_only = FLAGS.inference_only  # As there are two inputs where "eval_only" can be set, inference_only is the superior
     if FLAGS.min_delta < 1.0: FLAGS.min_delta *= 100                                    # As the model outputs metrics multiplied by a factor of 100, the min_delta value must also be scaled accordingly
     if FLAGS.debugging: FLAGS.eval_metric.replace("val", "train")                       # The metric used for evaluation will be a training metric, if we are debugging the model
@@ -86,11 +90,13 @@ def changeFLAGS(FLAGS):
     FLAGS.quit_training = False                                                         # The initial value for the "quit_training" parameter should be False
     FLAGS.ignore_label = 0 if FLAGS.ignore_background else 255                          # As default no labels will be ignored 
     segmentations_used = list()                                                         # Initiate a list to store the available segmentations 
-    if any(["semantic" in x.lower() for x in FLAGS.segmentation]): segmentations_used.append("Semantic")    # If the user chose to perform semantic segmentation, add that to the list of performed segmentations
-    if any(["instance" in x.lower() for x in FLAGS.segmentation]): segmentations_used.append("Instance")    # If the user chose to perform instance segmentation, add that to the list of performed segmentations
-    if any(["panoptic" in x.lower() for x in FLAGS.segmentation]): segmentations_used.append("Panoptic")    # If the user chose to perform panoptic segmentation, add that to the list of performed segmentations
+    FLAGS.segmentation = FLAGS.segmentation.split(",")                                  # Separate the input arguments and turn it into a list 
+    if any([x.lower().strip() in "semantic" for x in FLAGS.segmentation]): segmentations_used.append("Semantic")    # If the user chose to perform semantic segmentation, add that to the list of performed segmentations
+    if any([x.lower().strip() in "instance" for x in FLAGS.segmentation]): segmentations_used.append("Instance")    # If the user chose to perform instance segmentation, add that to the list of performed segmentations
+    if any([x.lower().strip() in "panoptic" for x in FLAGS.segmentation]): segmentations_used.append("Panoptic")    # If the user chose to perform panoptic segmentation, add that to the list of performed segmentations
     if len(segmentations_used) == 0: segmentations_used = ["Panoptic"]                  # If no segmentation was chosen, the default is panoptic segmentation
     FLAGS.segmentation = segmentations_used                                             # Add the list of chosen augmentations to the FLAGS Namespace 
+    
     return FLAGS
 
 
@@ -101,7 +107,7 @@ parser.add_argument("--dataset_name", type=str, default="vitrolife", help="Which
 parser.add_argument("--output_dir_postfix", type=str, default=start_time, help="Filename extension to add to the output directory of the current process. Default: now: 'HH_MM_DDMMMYYYY'")
 parser.add_argument("--eval_metric", type=str, default="val_AP", help="Metric to use in order to determine the 'best' model weights. Default: val_AP")
 parser.add_argument("--optimizer_used", type=str, default="ADAMW", help="Optimizer to use. Available [SGD, ADAMW]. Default: ADAMW")
-parser.add_argument("--segmentation", type=str, default="instance", nargs="*", help="The type of segmentation used for this running. Valid arguments [Semantic, Instance, Panoptic]. Default: Panoptic")
+parser.add_argument("--segmentation", type=str, default="panoptic", nargs="*", help="The type of segmentation used for this running. Valid arguments [Semantic, Instance, Panoptic]. Default: Panoptic")
 parser.add_argument("--num_workers", type=int, default=1, help="Number of workers to use for. Default: 2")
 parser.add_argument("--max_iter", type=int, default=int(1e5), help="Maximum number of iterations to train the model for. <<Deprecated argument. Use 'num_epochs' instead>>. Default: 100000")
 parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of the feature extracting ResNet backbone. Possible values: [18,34,50,101] Default: 101")
@@ -141,7 +147,7 @@ FLAGS = changeFLAGS(FLAGS)
 # Setup functions
 too_few_gpus_str, gpus_used_string, available_mem_info = assign_free_gpus(max_gpus=FLAGS.num_gpus)  # Assigning the running script to the selected amount of GPU's with the largest memory available
 if "vitrolife" in FLAGS.dataset_name.lower():                                           # If we want to work with the Vitrolife dataset ...
-    register_vitrolife_data_and_metadata_func(debugging=FLAGS.debugging)                # ... register the vitrolife dataset
+    register_vitrolife_data_and_metadata_func(debugging=FLAGS.debugging, panoptic="Panoptic" in FLAGS.segmentation) # ... register the vitrolife dataset
 else:                                                                                   # Otherwise, if we are working on the ade20k dataset ...
     for split in ["train", "val"]:                                                      # ... then we will find the training and the validation set
         MetadataCatalog["ade20k_instance_{:s}".format(split)].num_files_in_dataset = len(DatasetCatalog["ade20k_instance_{:s}".format(split)]())  # ... and create a key-value pair telling the number of files in the dataset
@@ -153,17 +159,19 @@ FLAGS.num_train_files = MetadataCatalog[cfg.DATASETS.TRAIN[0]].num_files_in_data
 FLAGS.num_val_files = MetadataCatalog[cfg.DATASETS.TEST[0]].num_files_in_dataset        # Write the number of validation files to the FLAGS namespace
 FLAGS.batch_size = np.min([FLAGS.batch_size, FLAGS.num_train_files])                    # The batch size can't be greater than the number of files in the dataset
 FLAGS.epoch_iter = int(np.floor(np.divide(FLAGS.num_train_files, FLAGS.batch_size)))    # Compute the number of iterations per training epoch
-FLAGS.num_classes = len(MetadataCatalog[cfg.DATASETS.TRAIN[0]].thing_classes)           # Get the number of classes in the current dataset
+if "ade20k" in FLAGS.dataset_name.lower():
+    FLAGS.num_classes = len(MetadataCatalog[cfg.DATASETS.TRAIN[0]].thing_classes)       # Get the number of classes in the current dataset
 FLAGS.available_mem_info = available_mem_info.tolist()                                  # Save the information of available GPU memory in the FLAGS variable
 FLAGS.conf_threshold = 0.50                                                             # The minimum confidence score a prediction needs in order to be treated as a "positive" prediction
 FLAGS.IoU_threshold = 0.30                                                              # The maximum overlap between two prediction masks before assuming they are different objects 
+FLAGS.PN_mean_pixel_area = 1363                                                         # Set the mean pixel area of a PN 
 cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                                      # Set the final values for the config
 
 # Change FLAGS num trials and epochs if on my local computer
 if "nico" in cfg.OUTPUT_DIR.lower():
     FLAGS.num_trials = 2
     FLAGS.num_epochs = 2
-    FLAGS.hp_optim = True 
+    FLAGS.hp_optim = False 
 
 # Create the log file
 log_file = os.path.join(cfg.OUTPUT_DIR, "Training_logs.txt")                            # Initiate the log filename
@@ -180,6 +188,7 @@ printAndLog(input_to_write=gpus_used_string, logs=log_file, postfix="\n")
 
 
 # Return the values again
-def setup_func(): return FLAGS, cfg, log_file
+def setup_func():
+    return FLAGS, cfg, log_file
 
 

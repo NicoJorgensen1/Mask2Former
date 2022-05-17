@@ -1,16 +1,21 @@
 # Import the libraries and functions used here
+from curses import meta
 import os
 import torch 
 import sys 
 import numpy as np
 from copy import deepcopy 
-from tqdm import tqdm 
+import tqdm 
 from detectron2.engine.defaults import DefaultPredictor
+from detectron2.evaluation import SemSegEvaluator, COCOPanopticEvaluator
+from custom_print_and_log_func import printAndLog
 from mask2former import MaskFormerInstanceDatasetMapper
 from mask2former import InstanceSegEvaluator
 from detectron2.data import build_detection_test_loader
 from detectron2.data import MetadataCatalog
-from custom_image_batch_visualize_func import NMS_pred
+from custom_image_batch_visualize_func import NMS_pred, putModelWeights
+from custom_panoptic_evaluator import Custom_Panoptic_Evaluator
+
 
 
 # Define a function to change a certain value in a numpy array into another value
@@ -21,65 +26,115 @@ def changeValue(inp, origVal=-1, newVal=0):                                     
 
 # data_split="train"
 # dataloader=None
-# evaluator=None
+# evaluators=None
 # hp_optim=False
 
-# Build evaluator to compute the evaluation metrics 
-def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluator=None, hp_optim=False):
+def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=None, hp_optim=False):
     # Get the correct properties
     dataset_name = cfg.DATASETS.TRAIN[0] if "train" in data_split.lower() else cfg.DATASETS.TEST[0]             # Get the name of the dataset that will be evaluated
     meta_data = MetadataCatalog.get(dataset_name)                                                               # Get the metadata of the current dataset 
     total_runs = meta_data.num_files_in_dataset                                                                 # Get the number of files in the chosen dataset
-    if "train" in data_split and hp_optim==True: total_runs = 10                                                # If we are performing hyperparameter optimization, only 10 train samples will be evaluated
-    if "ade20k" in FLAGS.dataset_name.lower() and hp_optim: total_runs = int(np.ceil(np.divide(total_runs, 4))) # If we are on the ADE20k dataset, then only 1/4 of the dataset will be evaluated during HPO
+    if "train" in data_split and hp_optim==True:                                                                # If we are performing hyperparameter optimization and evaluating the training set ...
+        total_runs = 10                                                                                         # ... only 10 train samples will be evaluated
+    if "ade20k" in FLAGS.dataset_name.lower() and hp_optim:                                                     # If we are on the ADE20k dataset ...
+        total_runs = int(np.ceil(np.divide(total_runs, 4)))                                                     # ... then only 1/4 of the dataset will be evaluated during HPO
 
-    pred_out_dir = os.path.join(cfg.OUTPUT_DIR, "Predictions", data_split)                                      # The path of where to store the resulting evaluation
-    os.makedirs(pred_out_dir, exist_ok=True)                                                                    # Create the evaluation folder, if it doesn't already exist
+    pred_out_dir = os.path.join(cfg.OUTPUT_DIR, "Predictions")                                                  # The path of where to store the resulting evaluation
+    sem_seg_out_dir = os.path.join(pred_out_dir, data_split, "Semantic_segmentation")
+    inst_seg_out_dir = os.path.join(pred_out_dir, data_split, "Instance_segmentation")
+    panop_seg_out_dir = os.path.join(pred_out_dir, data_split, "Panoptic_segmentation")
+    if "Semantic" in FLAGS.segmentation:                                                                        # Create the evaluation folder for semantic segmentation ...
+        os.makedirs(sem_seg_out_dir, exist_ok=True)                                                             # ... if it doesn't already exist
+    if "Instance" in FLAGS.segmentation:                                                                        # Create the evaluation folder for instance segmentation ...
+        os.makedirs(inst_seg_out_dir, exist_ok=True)                                                            # ... if it doesn't already exist
+    if "Panoptic" in FLAGS.segmentation:                                                                        # Create the evaluation folder for panoptic segmentation ...
+        os.makedirs(panop_seg_out_dir, exist_ok=True)                                                           # ... if it doesn't already exist
 
-    # Build the dataloader, evaluator and model instances
+    # Build the dataloader, evaluators and model instances
     if dataloader is None:                                                                                      # If no dataloader has been inputted to the function ...
         dataloader = build_detection_test_loader(cfg=cfg, dataset_name=dataset_name,                            # Create the dataloader ...
             batch_size=1, mapper=MaskFormerInstanceDatasetMapper(cfg=cfg, is_train=True, augmentations=[]), num_workers=1)     # ... with the default mapper and no augmentation 
-    if evaluator is None:                                                                                       # If there is no evaluator ...
+    if evaluators is None:                                                                                      # If there is no evaluators ...
         try: del meta_data.json_file                                                                            # ... then the json_file attribute of the MetadataCatalog is removed
         except: pass
-        evaluator = InstanceSegEvaluator(dataset_name=dataset_name, output_dir=pred_out_dir, allow_cached_coco=False)   # Build the evaluator instance
-    evaluator.reset()                                                                                           # Reset the evaluator metrics 
-    evaluator._max_dets_per_image = sorted(np.unique([1, 10, FLAGS.num_queries]).tolist())                      # The maximum allowed number of predictions pr image
+        evaluators = dict()
+        if "Semantic" in FLAGS.segmentation:
+            semantic_evaluator = SemSegEvaluator(dataset_name=dataset_name, output_dir=sem_seg_out_dir)         # Create an instance of the semantic segmentation evaluator 
+            evaluators["Semantic"] = semantic_evaluator
+        if "Instance" in FLAGS.segmentation:
+            instance_evaluator = InstanceSegEvaluator(dataset_name=dataset_name, output_dir=inst_seg_out_dir, allow_cached_coco=False)  # Build the evaluator for instance segmentation 
+            evaluators["Instance"] = instance_evaluator
+        if "Panoptic" in FLAGS.segmentation:
+            panoptic_evalutator = Custom_Panoptic_Evaluator(dataset_name=dataset_name, output_dir=panop_seg_out_dir)
+            evaluators["Panoptic"] = panoptic_evalutator
+
+    # Make the evaluator a dictionary of evaluators 
+    for evaluator in list(evaluators.values()):
+        evaluator.reset()                                                                                       # Reset the evaluator 
+        evaluator._max_dets_per_image = sorted(np.unique([1, 10, FLAGS.num_queries]).tolist())                  # The maximum allowed number of predictions pr image
 
     # Create the predictor instance 
     config_2 = deepcopy(cfg)                                                                                    # Create a new copy of the configuration
+    config_2 = putModelWeights(config=config_2)                                                                 # Assign the newest model weights to the config used for evaluation 
     config_2.TEST.DETECTIONS_PER_IMAGE = FLAGS.num_queries                                                      # Change the number of maximum detections pr test image 
     predictor = DefaultPredictor(config_2)                                                                      # Create an instance of the default predictor 
 
     # Create a progress bar to keep track on the evaluation
-    PN_pred_count, PN_true_count = list(), list()                                                               # Initiate lists 
-    with tqdm(total=total_runs, iterable=None, postfix="Evaluating the {:s} dataset".format(data_split), unit="img",  position=0,
-            file=sys.stdout, desc="Image {:d}/{:d}".format(1, total_runs), colour="green", leave=True, ascii=True, 
-            bar_format="{desc}  | {percentage:3.0f}% | {bar:35}| {n_fmt}/{total_fmt} | [Spent: {elapsed}. Remaining: {remaining} | {postfix}]") as tepoch:
-        #Predict all the files in the dataset
-        for kk, data_batch in enumerate(dataloader):                                                            # Iterate through all batches in the dataloader
-            outputs = list()                                                                                    # Initiate lists to store the predicted arrays and the ground truth tensors
-            for data in data_batch:                                                                             # Iterate over all dataset dictionaries in the list
-                img = torch.permute(data["image"], (1,2,0)).numpy()                                             # Make input image numpy format and [H,W,C]
-                y_pred = predictor.__call__(img)                                                                # Compute the predicted output
-                outputs.append(y_pred)                                                                          # Append the current prediction for the input image to the list of outputs
-                if "vitrolife" in dataset_name.lower() and "test" in data_split.lower():
-                    y_pred = y_pred["instances"].get_fields()
-                    PN_masks = NMS_pred(y_pred_dict=y_pred, data=data, meta_data=meta_data, conf_thresh=FLAGS.conf_threshold, IoU_thresh=FLAGS.IoU_threshold) 
-                    PN_pred_count.append(int(len(PN_masks)))
-                    PN_true_count.append(int(data["image_custom_info"]["PN_image"]))
-            evaluator.process(inputs=[data], outputs=outputs)                                                   # Process the results by adding the results to the confusion matrix
-            tepoch.desc = "Image {:d}/{:d} ".format(kk+1, total_runs)                                           # Update the description of the progress bar
-            tepoch.update(1)                                                                                    # Update progress bar 
-            if kk+1 >= total_runs: break                                                                        # If we have performed the total number of runs before emptying the dataloader (e.g. train datasplit during HPO), break the loop 
+    PN_pred_count, PN_true_count = dict(), dict()                                                               # Initiate dictionaries 
+    for kk, data_batch in tqdm.tqdm(enumerate(dataloader), total=total_runs, unit="img", position=0, colour="green",  ascii=True,
+        postfix="Evaluating the {:s} dataset".format(data_split), file=sys.stdout, desc="Evaluating all {} images".format(total_runs),
+        bar_format="{desc}  | {percentage:3.0f}% | {bar:35}| {n_fmt}/{total_fmt} | [Spent: {elapsed}. Remaining: {remaining} | {postfix}]"):    # Iterate through all batches in the dataloader
+        for data in data_batch:                                                                                 # Iterate over all dataset dictionaries in the list
+            img = torch.permute(data["image"], (1,2,0)).numpy()                                                 # Make input image numpy format and [H,W,C]
+            y_pred = predictor.__call__(img)                                                                    # Compute the predicted output
+            tqdm.tqdm.write("The sum of the prediction is: {}. The shape is {}".format(y_pred["panoptic_seg"][0].sum().cpu().numpy().item(), y_pred["panoptic_seg"][0].cpu().numpy().shape))
+            
+            #### This is just for debugging 
+            if np.sum(y_pred["panoptic_seg"][0].cpu().numpy()) == 0 and len(y_pred["panoptic_seg"][1]) == 0:
+                y_pred["panoptic_seg"] = (torch.ones_like(y_pred["panoptic_seg"][0]), [])
 
-    # Compute the metrics. NaN values typically happen when an object is not present on any of the evaluated images
-    eval_results = evaluator.evaluate()
-    for key in eval_results.keys():
-        for sub_key in eval_results[key].keys():
-            if np.isnan(eval_results[key][sub_key]):
-                eval_results[key][sub_key] = float(0)
+            # Count PN's for semantic segmentation 
+            if all(["Semantic" in FLAGS.segmentation, "vitrolife" in dataset_name.lower(), "test" in data_split.lower()]):
+                out_img = torch.nn.functional.softmax(torch.permute(y_pred["sem_seg"], (1,2,0)), dim=-1)        # Get the softmax output of the predicted image
+                out_pred_img = torch.argmax(out_img, dim=-1).cpu().numpy()                                      # Convert the predicted image into a numpy mask 
+                PN_pred_area = np.sum(out_pred_img == np.where(np.in1d(meta_data.stuff_classes, "PN"))[0].item())   # Count the area of predicted PNs
+                PN_pred_count["Semantic"] = int(np.ceil(np.divide(PN_pred_area, FLAGS.PN_mean_pixel_area)))     # Compute the predicted number of PN's 
+                PN_true_count["Semantic"] = int(data["image_custom_info"]["PN_image"])                          # Get the true number of PN's 
+
+            # Count PN's for instance segmentation
+            if all(["Instance" in FLAGS.segmentation, "vitrolife" in dataset_name.lower(), "test" in data_split.lower()]):
+                y_pred = y_pred["instances"].get_fields()
+                PN_masks = NMS_pred(y_pred_dict=y_pred, data=data, meta_data=meta_data, conf_thresh=FLAGS.conf_threshold, IoU_thresh=FLAGS.IoU_threshold) 
+                PN_pred_count["Instance"] = int(len(PN_masks))
+                PN_true_count["Instance"] = int(data["image_custom_info"]["PN_image"])
+            
+            # Process the values using the evaluators 
+            for evaluator in list(evaluators.values()):
+                evaluator.process(inputs=[data], outputs=[y_pred])                                              # Process the results by adding the results to the confusion matrix
+            tqdm.tqdm.desc = "Image {:d}/{:d} ".format(kk+1, total_runs)                                        # Update the description of the progress bar
+        if kk >= total_runs: break                                                                              # If we have performed the total number of runs before emptying the dataloader (e.g. train datasplit during HPO), break the loop 
+    
+    
+    missing_id = "97797782999910298100100297010210169919881098678097909156100981018299971025844232990310111002976336958701"
+    panoptic_json_file = meta_data.panoptic_json
+    import json 
+    with open(panoptic_json_file) as gg:
+        panoptic_json = json.load(gg)
+    for item in (panoptic_json["images"]):
+        if item["id"] == missing_id:
+            print("this is the one ")
+            break
+
+    # Evaluate results for all evaluators 
+    eval_results = dict()
+    for Segment_type, evaluator in evaluators.items():
+        eval_seg_type_results = evaluator.evaluate()
+        for key in eval_seg_type_results.keys():
+            for sub_key in eval_seg_type_results[key].keys():
+                if np.isnan(eval_seg_type_results[key][sub_key]):
+                    eval_seg_type_results[key][sub_key] = float(0)
+        eval_results[Segment_type] = eval_seg_type_results
+    
     
     # Read the COCOeval instance => https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocotools/cocoeval.py
     # The counts are [Thresholds-IoU, Recall-sample points, K classes, Area ranges, MaxDetections pr img] 
@@ -90,14 +145,15 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluator=N
     # M => 3 is the maximum number of detections made pr image, i.e. for when detecting only [1, 10, 100] objects on an image => coco_eval._paramsEval.maxDets = [1, 10, 100]
     # Thus np.mean(precision[0,:,:,0,1], axis=1) gives the 101 R=[0,0.01,1] sampled values on the precision-recall curve for IoU=0.50 for all classes, object areas with 10 detections pr image 
     # We use the changeValue function for precision and recall as the evaluation might contain a value of -1, which means that no GT object was present in that given setting that produced the -1 
-    for coco_eval, task_key in zip([evaluator._coco_eval_bbox, evaluator._coco_eval_segm], ["bbox", "segm"]):   # Iterate over both coco eval instances 
-        # coco_eval.summarize()                                                                                 # Print out the results for the current task in table form
-        eval_results[task_key]["precision"] = changeValue(coco_eval.eval.get("precision"))                      # Precision is [T,R,K,A,M] and thus [10,101,5,4,3] for Vitrolife with K=5 
-        eval_results[task_key]["scores"] = coco_eval.eval.get("scores")                                         # Confidence Scores is [T,R,K,A,M] and thus [10,101,5,4,3] 
-        eval_results[task_key]["recall"] = changeValue(coco_eval.eval.get("recall"))                            # Recall is [T,K,A,M] and [10,5,4,3]
-        eval_results[task_key]["precision_IoU50"] = np.mean(a=eval_results[task_key]["precision"][0,:,:,0,1], axis=1)   # The precision for IoU=0.50, Recall=[0,0.01,1], all classes and object sizes and 10 detections pr image 
-        for class_id, class_lbl in zip(MetadataCatalog.get(dataset_name).thing_dataset_id_to_contiguous_id.keys(), MetadataCatalog.get(dataset_name).thing_classes):
-            eval_results[task_key]["precision_IoU50_"+class_lbl] = np.mean(a=eval_results[task_key]["precision"][0,:,class_id,:,1], axis=1) # The precision for the given class with IoU@50, all recall values, all object sizes and 10 detections pr image 
-
+    if "Instance" in FLAGS.segmentation:
+        for coco_eval, task_key in zip([instance_evaluator._coco_eval_bbox, instance_evaluator._coco_eval_segm], ["bbox", "segm"]):   # Iterate over both coco eval instances 
+            # coco_eval.summarize()                                                                             # Print out the results for the current task in table form
+            eval_results["Instance"][task_key]["precision"] = changeValue(coco_eval.eval.get("precision"))                  # Precision is [T,R,K,A,M] and thus [10,101,5,4,3] for Vitrolife with K=5 
+            eval_results["Instance"][task_key]["scores"] = coco_eval.eval.get("scores")                                     # Confidence Scores is [T,R,K,A,M] and thus [10,101,5,4,3] 
+            eval_results["Instance"][task_key]["recall"] = changeValue(coco_eval.eval.get("recall"))                        # Recall is [T,K,A,M] and [10,5,4,3]
+            eval_results["Instance"][task_key]["precision_IoU50"] = np.mean(a=eval_results["Instance"][task_key]["precision"][0,:,:,0,1], axis=1)   # The precision for IoU=0.50, Recall=[0,0.01,1], all classes and object sizes and 10 detections pr image 
+            for class_id, class_lbl in zip(MetadataCatalog.get(dataset_name).thing_dataset_id_to_contiguous_id.keys(), MetadataCatalog.get(dataset_name).thing_classes):
+                eval_results["Instance"][task_key]["precision_IoU50_"+class_lbl] = np.mean(a=eval_results["Instance"][task_key]["precision"][0,:,class_id,:,1], axis=1) # The precision for the given class with IoU@50, all recall values, all object sizes and 10 detections pr image 
+    printAndLog(input_to_write="evaluation is done, it was a great success", logs=FLAGS.log_file)
     # Return the metrics
-    return eval_results, dataloader, evaluator, PN_pred_count, PN_true_count
+    return eval_results, dataloader, evaluators, PN_pred_count, PN_true_count

@@ -52,22 +52,20 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     cfg.MODEL.RESNETS.DEPTH = FLAGS.resnet_depth                                                    # The depth of the ResNet backbone (if used)
     cfg.MODEL.BACKBONE.FREEZE_AT = FLAGS.backbone_freeze_layers                                     # How many sections of a pretrained backbone that must be freezed
     cfg.MODEL.DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'                               # Assign the device on which the model should run
-    cfg.MODEL.WEIGHTS = ""                                                                          # Initialize the model with random model weights 
     cfg.MODEL.MASK_FORMER.DICE_WEIGHT = FLAGS.dice_loss_weight                                      # Set the weight for the dice loss (original 2)
     cfg.MODEL.MASK_FORMER.MASK_WEIGHT = FLAGS.mask_loss_weight                                      # Set the weight for the mask predictive loss (original 20)
     cfg.MODEL.MASK_FORMER.CLASS_WEIGHT = FLAGS.class_loss_weight                                    # Set the weight for the class weight loss 
     cfg.MODEL.MASK_FORMER.NO_OBJECT_WEIGHT = FLAGS.no_object_weight                                 # The loss weight for the "no-object" label
     cfg.MODEL.MASK_FORMER.TEST.OVERLAP_THRESHOLD = float(0.25)                                      # The threshold for overlapping masks. Default to 0.80 
-    cfg.MODEL.MASK_FORMER.TEST.PANOPTIC_ON = False                                                  # Disable the panoptic head for the maskformer 
     cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES = FLAGS.num_queries                                    # The number of queries to detect from the Transformer module 
     cfg.MODEL.MASK_FORMER.SIZE_DIVISIBILITY = 10                                                    # The size of the images will be padded to be in an equal division of 10 
     cfg.MODEL.MASK_FORMER.TEST.SEM_SEG_POSTPROCESSING_BEFORE_INFERENCE = True                       # Always make semantic segmentation predictions on downsampled data, and then resize afterwards 
     cfg.MODEL.PANOPTIC_FPN.COMBINE.ENABLED = False                                                  # Always disable the panoptic FPN head 
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512                                                  # The ROI head proposals per image 
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.50                                                    # Assign the IoU threshold used for the model
-    cfg.MODEL.RETINANET.NUM_CLASSES = len(MetadataCatalog.get("vitrolife_dataset_test").thing_classes)  # Assign the length of the thing_classes list as the number of classes
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES = cfg.MODEL.RETINANET.NUM_CLASSES                               # Set the number of classes for the ROI prediction head 
-    cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES = cfg.MODEL.ROI_HEADS.NUM_CLASSES                            # Set the number of classes for the sem_seg_head (that is unused when only doing instance segmentation)
+    cfg.MODEL.RETINANET.NUM_CLASSES = FLAGS.num_classes                                             # Assign the length of the thing_classes list as the number of classes
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = FLAGS.num_classes                                             # Set the number of classes for the ROI prediction head 
+    cfg.MODEL.SEM_SEG_HEAD.NUM_CLASSES = FLAGS.num_classes                                          # Assign the number of classes for the model to segment
     if "vitrolife" in FLAGS.dataset_name.lower(): 
         cfg.MODEL.PIXEL_MEAN = [100.15, 102.03, 103.89]                                             # Write the correct image mean value for the entire vitrolife dataset
         cfg.MODEL.PIXEL_STD = [57.32, 59.69, 61.93]                                                 # Write the correct image standard deviation value for the entire vitrolife dataset

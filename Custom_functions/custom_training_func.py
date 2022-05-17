@@ -15,11 +15,47 @@ from custom_evaluation_func import evaluateResults                              
 from custom_callback_functions import early_stopping, lr_scheduler, keepAllButLatestAndBestModel, updateLogsFunc    # Callback functions for model training
 
 
+
+
+# from custom_Trainer_class import custom_augmentation_mapper
+# from detectron2.data import MetadataCatalog, build_detection_train_loader
+# from detectron2.modeling import build_model
+# from mask2former.modeling.matcher import HungarianMatcher
+# from detectron2.structures import Boxes, ImageList, Instances, BitMasks
+# from mask2former.maskformer_model import MaskFormer
+# mapper = custom_augmentation_mapper(config=config, is_train="train" in config.DATASETS.TRAIN[0])
+# data_loader = build_detection_train_loader(cfg=config, mapper=mapper, num_workers=1)
+# data_loader_iter = iter(data_loader)
+# data = next(data_loader_iter)
+# model = build_model(cfg=config)
+# MaskFormer_model = MaskFormer(cfg=config)
+# img_torch = torch.reshape(data[0]["image"], (1,)+tuple(data[0]["image"].shape))
+# features = model.backbone(img_torch.to(model.device).to(torch.float))
+# outputs = model.sem_seg_head(features)
+# gt_instances = [x["instances"].to(MaskFormer_model.device) for x in data]
+# images = [x["image"].to(MaskFormer_model.device) for x in data]
+# images = [(x - MaskFormer_model.pixel_mean) / MaskFormer_model.pixel_std for x in images]
+# images = ImageList.from_tensors(images, MaskFormer_model.size_divisibility)
+# targets = MaskFormer_model.prepare_targets(gt_instances, images)
+# outputs_without_aux = {k: v for k, v in outputs.items() if k != "aux_outputs"}
+# matcher = HungarianMatcher(cost_class=FLAGS.class_loss_weight, cost_dice=FLAGS.dice_loss_weight,    # Create an instance of the ...
+#         cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)     # ... Hungarian Matcher class
+# bs, num_queries = outputs_without_aux["pred_logits"].shape[:2]
+
+# # These are the ones failing 
+# indices = matcher(outputs_without_aux, targets)
+# losses = MaskFormer_model.criterion(outputs, targets)
+
+
+
+
+
 # Run the training function 
 def run_train_func(cfg):
     Trainer = My_GoTo_Trainer(cfg)
     Trainer.resume_or_load(resume=False)
-    return Trainer.train()
+    Trainer.train()
+    return
 
 
 # Function to launch the training
@@ -117,7 +153,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     if FLAGS.inference_only: objective_mode = "inference"
     if hyperparameter_optimization: objective_mode = "hyperparameter optimization trial {:d}/{:d}".format(FLAGS.HPO_current_trial+1, FLAGS.num_trials)
     printAndLog(input_to_write="Start {:s}...".format(objective_mode).upper(), logs=logs, postfix="\n")     # Print and log a message saying that a new iteration is now starting
-    train_loader, val_loader, train_evaluator, val_evaluator, history = None, None, None, None, None        # Initiates all the loaders, evaluators and history as None type objects
+    train_loader, val_loader, train_evaluators, val_evaluators, history = None, None, None, None, None        # Initiates all the loaders, evaluators and history as None type objects
     train_mode = "min" if "loss" in FLAGS.eval_metric else "max"                                            # Compute the mode of which the performance should be measured. Either a negative or a positive value is better
     new_best = np.inf if train_mode=="min" else -np.inf                                                     # Initiate the original "best_value" as either infinity or -infinity according to train_mode
     best_epoch = 0                                                                                          # Initiate the best epoch as being epoch_0, i.e. before doing any model training
@@ -142,12 +178,12 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
         if FLAGS.inference_only==False:
             config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=train_dataset, epoch=epoch, run_mode="train", hyperparameter_opt=hyperparameter_optimization)    # Launch the training loop for one epoch
             if quit_training: break  
-            eval_train_results, train_loader, train_evaluator,_,_ = evaluateResults(FLAGS, config, data_split="train", dataloader=train_loader, evaluator=train_evaluator, hp_optim=hyperparameter_optimization) # Evaluate the result on the training set
+            eval_train_results, train_loader, train_evaluators,_,_ = evaluateResults(FLAGS, config, data_split="train", dataloader=train_loader, evaluators=train_evaluators, hp_optim=hyperparameter_optimization) # Evaluate the result on the training set
         
         # Validation period. Will 'train' with lr=0 on validation data, correct the metrics files and evaluate performance on validation data
         config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=val_dataset, epoch=epoch, run_mode="val", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
         if quit_training: break  
-        eval_val_results, val_loader, val_evaluator,_,_ = evaluateResults(FLAGS, config, data_split="val", dataloader=val_loader, evaluator=val_evaluator) # Evaluate the result metrics on the training set
+        eval_val_results, val_loader, val_evaluators,_,_ = evaluateResults(FLAGS, config, data_split="val", dataloader=val_loader, evaluators=val_evaluators) # Evaluate the result metrics on the training set
         config.DATASETS.TRAIN = train_dataset                                                           # Set the training dataset back 
         
         # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results

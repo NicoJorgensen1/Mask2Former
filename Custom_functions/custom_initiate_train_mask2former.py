@@ -23,6 +23,12 @@ assert os.path.isdir(dataset_dir), "The dataset directory doesn't exist in the c
 os.environ["DETECTRON2_DATASETS"] = dataset_dir
 
 
+##########
+# The variables PN_pred and PN_true are now dictionaries, not lists - be aware of that !!!
+
+
+
+
 # Import important libraries
 # import tracemalloc
 # tracemalloc.start()

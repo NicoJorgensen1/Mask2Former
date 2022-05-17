@@ -67,7 +67,8 @@ class My_GoTo_Trainer(DefaultTrainer):
         # Instance segmentation dataset mapper 
         # mapper = MaskFormerInstanceDatasetMapper(cfg, True)
         mapper = custom_augmentation_mapper(config=cfg, is_train="train" in cfg.DATASETS.TRAIN[0])
-        return build_detection_train_loader(cfg, mapper=mapper, num_workers=1)
+        data_loader = build_detection_train_loader(cfg, mapper=mapper, num_workers=1)
+        return data_loader
 
     @classmethod
     def build_lr_scheduler(cls, cfg, optimizer, start_val=1, end_val=1):

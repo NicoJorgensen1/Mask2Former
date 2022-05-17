@@ -50,7 +50,7 @@ def extractNumbersFromString(str, dtype=float, numbersWanted=1):
 
 # Define a function to put the latest saved model as the model_weights in the config before creating the dataloader
 def putModelWeights(config, delete_remaining=False):
-    model_files = [x for x in os.listdir(config.OUTPUT_DIR) if not np.isnan(extractNumbersFromString(x)) and all([y in x for y in ["model", "_epoch_", ".pth"]])]   # Find all saved model checkpoints
+    model_files = [x for x in os.listdir(config.OUTPUT_DIR) if not np.isnan(extractNumbersFromString(x)) and all([y in x for y in ["model", "_epoch_"]]) and any([x.endswith(".pth"), x.endswith(".pkl")])]   # Find all saved model checkpoints
     if len(model_files) >= 1:                                                               # If any model checkpoint is found, 
         iteration_numbers = [extractNumbersFromString(x, int) for x in model_files]         # Find the iteration numbers for when they were saved
         latest_iteration_idx = np.argmax(iteration_numbers)                                 # Find the index of the model checkpoint with the latest iteration number
