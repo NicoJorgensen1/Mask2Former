@@ -71,6 +71,13 @@ def write_config_to_file(config):
 
 # Alter the FLAGS input arguments
 def changeFLAGS(FLAGS):
+    segmentations_used = list()                                                         # Initiate a list to store the available segmentations 
+    FLAGS.segmentation = FLAGS.segmentation.split(",")                                  # Separate the input arguments and turn it into a list 
+    if any([x.lower().strip() in "semantic" for x in FLAGS.segmentation]): segmentations_used.append("Semantic")    # If the user chose to perform semantic segmentation, add that to the list of performed segmentations
+    if any([x.lower().strip() in "instance" for x in FLAGS.segmentation]): segmentations_used.append("Instance")    # If the user chose to perform instance segmentation, add that to the list of performed segmentations
+    if any([x.lower().strip() in "panoptic" for x in FLAGS.segmentation]): segmentations_used.append("Panoptic")    # If the user chose to perform panoptic segmentation, add that to the list of performed segmentations
+    if len(segmentations_used) == 0: segmentations_used = ["Panoptic"]                  # If no segmentation was chosen, the default is panoptic segmentation
+    FLAGS.segmentation = segmentations_used                                             # Add the list of chosen augmentations to the FLAGS Namespace 
     if FLAGS.num_gpus != FLAGS.gpus_used: FLAGS.num_gpus = FLAGS.gpus_used              # As there are two input arguments where the number of GPUs can be assigned, the gpus_used argument is superior
     if "ade" in FLAGS.dataset_name.lower():                                             # If working with ade20k, then the dataset name must match ...
         FLAGS.dataset_name = "ade20k"                                                   # ... set it here to assure it is always the same, no matter the user input 
@@ -88,15 +95,7 @@ def changeFLAGS(FLAGS):
     FLAGS.epoch_num = 0                                                                 # A counter iterating over the number of epochs 
     FLAGS.HPO_best_metric = np.inf if "loss" in FLAGS.eval_metric.lower() else -np.inf  # Create variable to keep track of the best results obtained when performing HPO
     FLAGS.quit_training = False                                                         # The initial value for the "quit_training" parameter should be False
-    FLAGS.ignore_label = 0 if FLAGS.ignore_background else 255                          # As default no labels will be ignored 
-    segmentations_used = list()                                                         # Initiate a list to store the available segmentations 
-    FLAGS.segmentation = FLAGS.segmentation.split(",")                                  # Separate the input arguments and turn it into a list 
-    if any([x.lower().strip() in "semantic" for x in FLAGS.segmentation]): segmentations_used.append("Semantic")    # If the user chose to perform semantic segmentation, add that to the list of performed segmentations
-    if any([x.lower().strip() in "instance" for x in FLAGS.segmentation]): segmentations_used.append("Instance")    # If the user chose to perform instance segmentation, add that to the list of performed segmentations
-    if any([x.lower().strip() in "panoptic" for x in FLAGS.segmentation]): segmentations_used.append("Panoptic")    # If the user chose to perform panoptic segmentation, add that to the list of performed segmentations
-    if len(segmentations_used) == 0: segmentations_used = ["Panoptic"]                  # If no segmentation was chosen, the default is panoptic segmentation
-    FLAGS.segmentation = segmentations_used                                             # Add the list of chosen augmentations to the FLAGS Namespace 
-    
+    FLAGS.ignore_label = 0 if FLAGS.ignore_background else 255                          # As default no labels will be ignored     
     return FLAGS
 
 
@@ -107,7 +106,7 @@ parser.add_argument("--dataset_name", type=str, default="vitrolife", help="Which
 parser.add_argument("--output_dir_postfix", type=str, default=start_time, help="Filename extension to add to the output directory of the current process. Default: now: 'HH_MM_DDMMMYYYY'")
 parser.add_argument("--eval_metric", type=str, default="val_AP", help="Metric to use in order to determine the 'best' model weights. Default: val_AP")
 parser.add_argument("--optimizer_used", type=str, default="ADAMW", help="Optimizer to use. Available [SGD, ADAMW]. Default: ADAMW")
-parser.add_argument("--segmentation", type=str, default="panoptic", nargs="*", help="The type of segmentation used for this running. Valid arguments [Semantic, Instance, Panoptic]. Default: Panoptic")
+parser.add_argument("--segmentation", type=str, default="instance", help="The type of segmentation used for this running. Valid arguments [Semantic, Instance, Panoptic]. Default: Panoptic")
 parser.add_argument("--num_workers", type=int, default=1, help="Number of workers to use for. Default: 2")
 parser.add_argument("--max_iter", type=int, default=int(1e5), help="Maximum number of iterations to train the model for. <<Deprecated argument. Use 'num_epochs' instead>>. Default: 100000")
 parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of the feature extracting ResNet backbone. Possible values: [18,34,50,101] Default: 101")
@@ -171,11 +170,12 @@ cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                              
 if "nico" in cfg.OUTPUT_DIR.lower():
     FLAGS.num_trials = 2
     FLAGS.num_epochs = 2
-    FLAGS.hp_optim = False 
+    FLAGS.hp_optim = True 
 
 # Create the log file
 log_file = os.path.join(cfg.OUTPUT_DIR, "Training_logs.txt")                            # Initiate the log filename
-if os.path.exists(log_file): os.remove(log_file)                                        # Remove an earlier logfile if that already exists (which it shouldn't)
+if os.path.exists(log_file):                                                            # If an earlier version of the logfile exists ...
+    os.remove(log_file)                                                                 # ... remove that one 
 FLAGS.log_file = log_file                                                               # Assign the logfile to the FLAGS arguments 
 
 

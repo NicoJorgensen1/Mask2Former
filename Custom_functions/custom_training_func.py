@@ -169,10 +169,10 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     config, FLAGS = get_HPO_params(config=cfg, FLAGS=FLAGS, trial=trial, hpt_opt=hyperparameter_optimization)
     
     # Train the model 
+    run_type = "trial" if hyperparameter_optimization else "epoch"                                          # Either we are in a HPO trial or an epoch 
+    total_runs = FLAGS.num_trials if hyperparameter_optimization else FLAGS.num_epochs                      # Get the total number of trials or epochs to run for 
     for epoch in range(epochs_to_run):                                                                      # Iterate over the chosen amount of epochs
-        run_type = "trial" if hyperparameter_optimization else "epoch"                                      # Either we are in a HPO trial or an epoch 
         run_numb = FLAGS.HPO_current_trial+1 if hyperparameter_optimization else epoch+1                    # Get the current trial or the current epoch number 
-        total_runs = FLAGS.num_trials if hyperparameter_optimization else FLAGS.num_epochs                  # Get the total number of trials or epochs to run for 
     # try:
         epoch_start_time = time()                                                                       # Now this new epoch starts
         if FLAGS.inference_only==False:
@@ -187,8 +187,8 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
         config.DATASETS.TRAIN = train_dataset                                                           # Set the training dataset back 
         
         # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results
-        history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results["segm"],    # Create and save the learning curves ...
-                    metrics_eval=eval_val_results["segm"], history=history)                             # ... including all training and validation metrics
+        history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results,    # Create and save the learning curves ...
+                    metrics_eval=eval_val_results, history=history)                             # ... including all training and validation metrics
         save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
         [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
         
@@ -224,7 +224,9 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     if all([FLAGS.debugging == False, "vitrolife" in FLAGS.dataset_name.lower(), hyperparameter_optimization==False]):  # Inference will only be performed when training the Vitrolife model
         config.DATASETS.TEST = ("vitrolife_dataset_test",)                                                  # The inference will be done on the test dataset
         eval_test_results,_,_,PN_pred_count,PN_true_count = evaluateResults(FLAGS, config, data_split="test")   # Evaluate the result metrics on the validation set with the best performing model
-        history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_test_results["segm"], data_split="test")
+        if len(FLAGS.segmentation) == 1:                                                                    # Only one type of segmentation at the time supported at the moment 
+            eval_metrics = eval_test_results[FLAGS.segmentation[0]]["segm"]
+        history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_metrics, data_split="test")
         for key in history_test.keys():                                                                     # Iterate over all the keys in the history dictionary
             if "test" in key: test_history[key] = history_test[key][-1]                                     # If "test" is in the key, assign the value to the test_dictionary 
         save_dictionary(dictObject=test_history, save_folder=config.OUTPUT_DIR, dictName="test_history")    # Save the test results in a dictionary 

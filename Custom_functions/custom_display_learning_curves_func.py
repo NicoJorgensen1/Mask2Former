@@ -121,7 +121,11 @@ def combineDataToHistoryDictionaryFunc(config, eval_metrics=None, data_split="tr
 
 
 # Function to display learning curves
-def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):           # Define a function to visualize the learning curves
+def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):                             # Define a function to visualize the learning curves
+    if len(FLAGS.segmentation) == 1:                                                                    # Only one type of segmentation supported at the moment 
+        metrics_train = metrics_train[FLAGS.segmentation[0]]["segm"]
+        metrics_eval = metrics_eval[FLAGS.segmentation[0]]["segm"]
+
     # Create history and list of relevant history keys
     if FLAGS.inference_only==False or FLAGS.hp_optim==False:
         history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_train, data_split="train", history=history)

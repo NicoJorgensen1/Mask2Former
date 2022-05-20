@@ -80,7 +80,7 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     cfg.SOLVER.WEIGHT_DECAY = FLAGS.weight_decay                                                    # A small lambda value for the weight decay. It is larger when training with transformers
     cfg.SOLVER.CLIP_GRADIENTS.ENABLED = True                                                        # We need to clip the gradients during training in order to avoid exploding gradients, especially when performing HPO
     cfg.SOLVER.BACKBONE_MULTIPLIER = FLAGS.backbone_multiplier                                      # Backbone learning rate = learning_rate * backbone_multiplier
-    cfg.SOLVER.CHECKPOINT_PERIOD = FLAGS.epoch_iter                                                 # Save a new model checkpoint after each epoch, i.e. after everytime the entire trainining set has been seen by the model
+    cfg.SOLVER.CHECKPOINT_PERIOD = FLAGS.epoch_iter*4                                               # Dont save the mid-way checkpoints, only final models, after each epoch ... 
     cfg.SOLVER.STEPS = []                                                                           # We won't lower the learning rate in an epoch, use FLAGS.patience instead 
     cfg.SOLVER.GAMMA = 1                                                                            # After every "step" iterations the learning rate will be updated, as new_lr = old_lr*gamma
     

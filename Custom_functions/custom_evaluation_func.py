@@ -16,16 +16,15 @@ from detectron2.data import MetadataCatalog
 from custom_image_batch_visualize_func import NMS_pred, putModelWeights
 from custom_panoptic_evaluator import Custom_Panoptic_Evaluator
 
-
-
 # Define a function to change a certain value in a numpy array into another value
 def changeValue(inp, origVal=-1, newVal=0):                                                                     # The function will take a numpy array as input and an original value that must be changed
     inp[inp==origVal] = newVal                                                                                  # Change all indices of the original value to the new value 
     return inp                                                                                                  # Return the modified numpy array 
 
 
-# data_split="train"
+# data_split="test"
 # dataloader=None
+# cfg=config
 # evaluators=None
 # hp_optim=False
 
@@ -34,10 +33,11 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
     dataset_name = cfg.DATASETS.TRAIN[0] if "train" in data_split.lower() else cfg.DATASETS.TEST[0]             # Get the name of the dataset that will be evaluated
     meta_data = MetadataCatalog.get(dataset_name)                                                               # Get the metadata of the current dataset 
     total_runs = meta_data.num_files_in_dataset                                                                 # Get the number of files in the chosen dataset
-    if "train" in data_split and hp_optim==True:                                                                # If we are performing hyperparameter optimization and evaluating the training set ...
-        total_runs = 10                                                                                         # ... only 10 train samples will be evaluated
-    if "ade20k" in FLAGS.dataset_name.lower() and hp_optim:                                                     # If we are on the ADE20k dataset ...
-        total_runs = int(np.ceil(np.divide(total_runs, 4)))                                                     # ... then only 1/4 of the dataset will be evaluated during HPO
+    if "Panoptic" not in FLAGS.segmentation:
+        if "train" in data_split and hp_optim==True:                                                            # If we are performing hyperparameter optimization and evaluating the training set ...
+            total_runs = 10                                                                                     # ... only 10 train samples will be evaluated
+        if "ade20k" in FLAGS.dataset_name.lower() and hp_optim:                                                 # If we are on the ADE20k dataset ...
+            total_runs = int(np.ceil(np.divide(total_runs, 4)))                                                 # ... then only 1/4 of the dataset will be evaluated during HPO
 
     pred_out_dir = os.path.join(cfg.OUTPUT_DIR, "Predictions")                                                  # The path of where to store the resulting evaluation
     sem_seg_out_dir = os.path.join(pred_out_dir, data_split, "Semantic_segmentation")
@@ -59,19 +59,19 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
         except: pass
         evaluators = dict()
         if "Semantic" in FLAGS.segmentation:
-            semantic_evaluator = SemSegEvaluator(dataset_name=dataset_name, output_dir=sem_seg_out_dir)         # Create an instance of the semantic segmentation evaluator 
+            semantic_evaluator = deepcopy(SemSegEvaluator(dataset_name=dataset_name, output_dir=sem_seg_out_dir))   # Create an instance of the semantic segmentation evaluator 
             evaluators["Semantic"] = semantic_evaluator
         if "Instance" in FLAGS.segmentation:
-            instance_evaluator = InstanceSegEvaluator(dataset_name=dataset_name, output_dir=inst_seg_out_dir, allow_cached_coco=False)  # Build the evaluator for instance segmentation 
+            instance_evaluator = deepcopy(InstanceSegEvaluator(dataset_name=dataset_name, output_dir=inst_seg_out_dir, allow_cached_coco=False))    # Build the evaluator for instance segmentation 
             evaluators["Instance"] = instance_evaluator
         if "Panoptic" in FLAGS.segmentation:
-            panoptic_evalutator = Custom_Panoptic_Evaluator(dataset_name=dataset_name, output_dir=panop_seg_out_dir)
+            panoptic_evalutator = deepcopy(Custom_Panoptic_Evaluator(dataset_name=dataset_name, output_dir=panop_seg_out_dir))
             evaluators["Panoptic"] = panoptic_evalutator
 
     # Make the evaluator a dictionary of evaluators 
-    for evaluator in list(evaluators.values()):
-        evaluator.reset()                                                                                       # Reset the evaluator 
-        evaluator._max_dets_per_image = sorted(np.unique([1, 10, FLAGS.num_queries]).tolist())                  # The maximum allowed number of predictions pr image
+    for Segment_type in list(evaluators.keys()):
+        evaluators[Segment_type].reset()                                                                        # Reset the evaluator 
+        evaluators[Segment_type]._max_dets_per_image = sorted(np.unique([1, 10, FLAGS.num_queries]).tolist())   # The maximum allowed number of predictions pr image
 
     # Create the predictor instance 
     config_2 = deepcopy(cfg)                                                                                    # Create a new copy of the configuration
@@ -87,11 +87,14 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
         for data in data_batch:                                                                                 # Iterate over all dataset dictionaries in the list
             img = torch.permute(data["image"], (1,2,0)).numpy()                                                 # Make input image numpy format and [H,W,C]
             y_pred = predictor.__call__(img)                                                                    # Compute the predicted output
-            tqdm.tqdm.write("The sum of the prediction is: {}. The shape is {}".format(y_pred["panoptic_seg"][0].sum().cpu().numpy().item(), y_pred["panoptic_seg"][0].cpu().numpy().shape))
             
-            #### This is just for debugging 
-            if np.sum(y_pred["panoptic_seg"][0].cpu().numpy()) == 0 and len(y_pred["panoptic_seg"][1]) == 0:
-                y_pred["panoptic_seg"] = (torch.ones_like(y_pred["panoptic_seg"][0]), [])
+            # Process the values using the evaluators 
+            for Segment_type in list(evaluators.keys()):
+                evaluators[Segment_type].process(inputs=[data], outputs=[y_pred])                               # Process the results by adding the results to the confusion matrix
+            
+            if "Panoptic" in FLAGS.segmentation:
+                # tqdm.tqdm.write("The sum of the prediction is: {}. The shape is {}".format(y_pred["panoptic_seg"][0].sum().cpu().numpy().item(), y_pred["panoptic_seg"][0].cpu().numpy().shape))
+                pass 
 
             # Count PN's for semantic segmentation 
             if all(["Semantic" in FLAGS.segmentation, "vitrolife" in dataset_name.lower(), "test" in data_split.lower()]):
@@ -108,27 +111,14 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
                 PN_pred_count["Instance"] = int(len(PN_masks))
                 PN_true_count["Instance"] = int(data["image_custom_info"]["PN_image"])
             
-            # Process the values using the evaluators 
-            for evaluator in list(evaluators.values()):
-                evaluator.process(inputs=[data], outputs=[y_pred])                                              # Process the results by adding the results to the confusion matrix
             tqdm.tqdm.desc = "Image {:d}/{:d} ".format(kk+1, total_runs)                                        # Update the description of the progress bar
-        if kk >= total_runs: break                                                                              # If we have performed the total number of runs before emptying the dataloader (e.g. train datasplit during HPO), break the loop 
-    
-    
-    missing_id = "97797782999910298100100297010210169919881098678097909156100981018299971025844232990310111002976336958701"
-    panoptic_json_file = meta_data.panoptic_json
-    import json 
-    with open(panoptic_json_file) as gg:
-        panoptic_json = json.load(gg)
-    for item in (panoptic_json["images"]):
-        if item["id"] == missing_id:
-            print("this is the one ")
-            break
+        if kk >= total_runs:                                                                                    # If we have performed the total number of runs before emptying the dataloader (e.g. train datasplit during HPO) ...
+            break                                                                                               # ... break the loop 
 
     # Evaluate results for all evaluators 
     eval_results = dict()
-    for Segment_type, evaluator in evaluators.items():
-        eval_seg_type_results = evaluator.evaluate()
+    for Segment_type in evaluators.keys():
+        eval_seg_type_results = evaluators[Segment_type].evaluate()
         for key in eval_seg_type_results.keys():
             for sub_key in eval_seg_type_results[key].keys():
                 if np.isnan(eval_seg_type_results[key][sub_key]):
@@ -146,14 +136,25 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
     # Thus np.mean(precision[0,:,:,0,1], axis=1) gives the 101 R=[0,0.01,1] sampled values on the precision-recall curve for IoU=0.50 for all classes, object areas with 10 detections pr image 
     # We use the changeValue function for precision and recall as the evaluation might contain a value of -1, which means that no GT object was present in that given setting that produced the -1 
     if "Instance" in FLAGS.segmentation:
-        for coco_eval, task_key in zip([instance_evaluator._coco_eval_bbox, instance_evaluator._coco_eval_segm], ["bbox", "segm"]):   # Iterate over both coco eval instances 
+        for coco_eval, task_key in zip([evaluators["Instance"]._coco_eval_bbox, evaluators["Instance"]._coco_eval_segm], ["bbox", "segm"]):   # Iterate over both coco eval instances 
             # coco_eval.summarize()                                                                             # Print out the results for the current task in table form
             eval_results["Instance"][task_key]["precision"] = changeValue(coco_eval.eval.get("precision"))                  # Precision is [T,R,K,A,M] and thus [10,101,5,4,3] for Vitrolife with K=5 
             eval_results["Instance"][task_key]["scores"] = coco_eval.eval.get("scores")                                     # Confidence Scores is [T,R,K,A,M] and thus [10,101,5,4,3] 
             eval_results["Instance"][task_key]["recall"] = changeValue(coco_eval.eval.get("recall"))                        # Recall is [T,K,A,M] and [10,5,4,3]
             eval_results["Instance"][task_key]["precision_IoU50"] = np.mean(a=eval_results["Instance"][task_key]["precision"][0,:,:,0,1], axis=1)   # The precision for IoU=0.50, Recall=[0,0.01,1], all classes and object sizes and 10 detections pr image 
             for class_id, class_lbl in zip(MetadataCatalog.get(dataset_name).thing_dataset_id_to_contiguous_id.keys(), MetadataCatalog.get(dataset_name).thing_classes):
-                eval_results["Instance"][task_key]["precision_IoU50_"+class_lbl] = np.mean(a=eval_results["Instance"][task_key]["precision"][0,:,class_id,:,1], axis=1) # The precision for the given class with IoU@50, all recall values, all object sizes and 10 detections pr image 
+                eval_results["Instance"][task_key]["precision_IoU50_"+class_lbl] = np.mean(a=eval_results["Instance"][task_key]["precision"][0,:,class_id-1,:,1], axis=1) # The precision for the given class with IoU@50, all recall values, all object sizes and 10 detections pr image 
+        
     printAndLog(input_to_write="evaluation is done, it was a great success", logs=FLAGS.log_file)
+
+    try:
+        if "Semantic" in FLAGS.segmentation:
+            evaluators["Semantic"] = deepcopy(semantic_evaluator)
+        if "Instance" in FLAGS.segmentation:
+            evaluators["Instance"] = deepcopy(instance_evaluator)
+        if "Panoptic" in FLAGS.segmentation:
+            evaluators["Panoptic"] = deepcopy(panoptic_evalutator)
+    except:
+        pass 
     # Return the metrics
     return eval_results, dataloader, evaluators, PN_pred_count, PN_true_count

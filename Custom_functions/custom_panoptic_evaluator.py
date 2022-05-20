@@ -1,21 +1,147 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
 import contextlib
 import io
+import copy 
 import itertools
+import time 
 import json
 import logging
-import numpy as np
+import shutil
 import os
 import tempfile
+import numpy as np 
 from collections import OrderedDict
-from typing import Optional
-from PIL import Image
-from tabulate import tabulate
-from detectron2.data import MetadataCatalog
 from detectron2.utils import comm
 from detectron2.utils.file_io import PathManager
-from detectron2.evaluation.evaluator import DatasetEvaluator
-from detectron2.evaluation.panoptic_evaluation import COCOPanopticEvaluator, _print_panoptic_results, pq_compute_multi_core
+from detectron2.evaluation.panoptic_evaluation import COCOPanopticEvaluator, _print_panoptic_results
+import multiprocessing
+from detectron2.data import MetadataCatalog
+from panopticapi.evaluation import PQStat, PQStatCat
+from matplotlib import pyplot as plt 
+from panopticapi.utils import get_traceback, rgb2id, id2rgb
+from PIL import Image
+from imantics import Image as imantics_Image
+from imantics import Mask as imantics_Mask
+from imantics import Category as imantics_Category
+
+
+logger = logging.getLogger(__name__)
+OFFSET = 256 * 256 * 256
+VOID = 255
+
+
+@get_traceback
+def pq_compute_single_core_own(proc_id, annotation_set, gt_folder, pred_folder, categories):
+    pq_stat = PQStat()
+
+    idx = 0
+    for gt_ann, pred_ann in annotation_set:
+        if idx % 100 == 0:
+            print('Core: {}, {} from {} images processed'.format(proc_id, idx, len(annotation_set)))
+        idx += 1
+
+        pan_gt = np.array(Image.open(os.path.join(gt_folder, gt_ann['file_name'])), dtype=np.uint32)
+        pan_gt = rgb2id(pan_gt)
+        pan_pred = np.array(Image.open(os.path.join(pred_folder, pred_ann['file_name'])), dtype=np.uint32)
+        unique_colors = np.unique(pan_pred.reshape(-1, pan_pred.shape[2]), axis=0).tolist()
+        if len(unique_colors) == 1:
+            true_id_idx = np.argmax(unique_colors[0])
+            pan_pred = copy.deepcopy(pan_pred[:,:,true_id_idx])
+            pan_pred = np.stack((pan_pred,)*3, axis=-1)
+        pan_pred = rgb2id(pan_pred)
+
+        gt_segms = {el['id']: el for el in gt_ann['segments_info']}
+        pred_segms = {el['id']: el for el in pred_ann['segments_info']}
+        
+        # predicted segments area calculation + prediction sanity checks
+        pred_labels_set = set(el['id'] for el in pred_ann['segments_info'])
+        labels, labels_cnt = np.unique(pan_pred, return_counts=True)
+        for label, label_cnt in zip(labels, labels_cnt):
+            if label not in pred_segms:
+                if label == VOID:
+                    continue
+                raise KeyError('In the image with ID {} segment with ID {} is presented in PNG and not presented in JSON.'.format(gt_ann['image_id'], label))
+            pred_segms[label]['area'] = label_cnt
+            pred_labels_set.remove(label)
+            if pred_segms[label]['category_id'] not in categories:
+                raise KeyError('In the image with ID {} segment with ID {} has unknown category_id {}.'.format(gt_ann['image_id'], label, pred_segms[label]['category_id']))
+        if len(pred_labels_set) != 0:
+            raise KeyError('In the image with ID {} the following segment IDs {} are presented in JSON and not presented in PNG.'.format(gt_ann['image_id'], list(pred_labels_set)))
+
+        # confusion matrix calculation
+        pan_gt_pred = pan_gt.astype(np.uint64) * OFFSET + pan_pred.astype(np.uint64)
+        gt_pred_map = {}
+        labels, labels_cnt = np.unique(pan_gt_pred, return_counts=True)
+        for label, intersection in zip(labels, labels_cnt):
+            gt_id = label // OFFSET
+            pred_id = label % OFFSET
+            gt_pred_map[(gt_id, pred_id)] = intersection
+
+        # count all matched pairs
+        gt_matched = set()
+        pred_matched = set()
+        for label_tuple, intersection in gt_pred_map.items():
+            gt_label, pred_label = label_tuple
+            if gt_label not in gt_segms:
+                continue
+            if pred_label not in pred_segms:
+                continue
+            if gt_segms[gt_label]['iscrowd'] == 1:
+                continue
+            if gt_segms[gt_label]['category_id'] != pred_segms[pred_label]['category_id']:
+                continue
+
+            union = pred_segms[pred_label]['area'] + gt_segms[gt_label]['area'] - intersection - gt_pred_map.get((VOID, pred_label), 0)
+            iou = intersection / union
+            if iou > 0.5:
+                pq_stat[gt_segms[gt_label]['category_id']].tp += 1
+                pq_stat[gt_segms[gt_label]['category_id']].iou += iou
+                gt_matched.add(gt_label)
+                pred_matched.add(pred_label)
+
+        # count false positives
+        crowd_labels_dict = {}
+        for gt_label, gt_info in gt_segms.items():
+            if gt_label in gt_matched:
+                continue
+            # crowd segments are ignored
+            if gt_info['iscrowd'] == 1:
+                crowd_labels_dict[gt_info['category_id']] = gt_label
+                continue
+            pq_stat[gt_info['category_id']].fn += 1
+
+        # count false positives
+        for pred_label, pred_info in pred_segms.items():
+            if pred_label in pred_matched:
+                continue
+            # intersection of the segment with VOID
+            intersection = gt_pred_map.get((VOID, pred_label), 0)
+            # plus intersection with corresponding CROWD region if it exists
+            if pred_info['category_id'] in crowd_labels_dict:
+                intersection += gt_pred_map.get((crowd_labels_dict[pred_info['category_id']], pred_label), 0)
+            # predicted segment is ignored if more than half of the segment correspond to VOID and CROWD regions
+            if intersection / pred_info['area'] > 0.5:
+                continue
+            pq_stat[pred_info['category_id']].fp += 1
+    print('Core: {}, all {} images processed'.format(proc_id, len(annotation_set)))
+    return pq_stat
+
+
+# Copy of pq_compute_multi_core used for computing the PQ metric. Primarily copied for debugging reasons.
+def pq_compute_multi_core_own(matched_annotations_list, gt_folder, pred_folder, categories):
+    cpu_num = multiprocessing.cpu_count()
+    annotations_split = np.array_split(matched_annotations_list, cpu_num)
+    print("Number of cores: {}, images per core: {}".format(cpu_num, len(annotations_split[0])))
+    workers = multiprocessing.Pool(processes=cpu_num)
+    processes = []
+    for proc_id, annotation_set in enumerate(annotations_split):
+        p = workers.apply_async(pq_compute_single_core_own,
+                                (proc_id, annotation_set, gt_folder, pred_folder, categories))
+        processes.append(p)
+    pq_stat = PQStat()
+    for p in processes:
+        pq_stat += p.get()
+    return pq_stat
 
 
 # Copy of the pq_compute function used for computing the PQ metric. This is mostly copied into my own code for debugging reasons ....
@@ -54,7 +180,11 @@ def pq_compute_own(gt_json_file, pred_json_file, gt_folder=None, pred_folder=Non
             raise Exception('no prediction for the image with id: {}'.format(image_id))
         matched_annotations_list.append((gt_ann, pred_annotations[image_id]))
 
-    pq_stat = pq_compute_multi_core(matched_annotations_list, gt_folder, pred_folder, categories)
+    # matched_annotations_list=matched_annotations_list
+    # gt_folder=gt_folder
+    # pred_folder=pred_folder
+    # categories=categories
+    pq_stat = pq_compute_multi_core_own(matched_annotations_list=matched_annotations_list, gt_folder=gt_folder, pred_folder=pred_folder, categories=categories)
 
     metrics = [("All", None), ("Things", True), ("Stuff", False)]
     results = {}
@@ -80,10 +210,57 @@ def pq_compute_own(gt_json_file, pred_json_file, gt_folder=None, pred_folder=Non
     return results
 
 
-
-
 # Define a custom panoptic evaluator class using the COCO structure of the dataset. This is primarily to save the json files differently 
 class Custom_Panoptic_Evaluator(COCOPanopticEvaluator):
+    def process(self, inputs, outputs):
+        for input, output in zip(inputs, outputs):
+            panoptic_img, segments_info = output["panoptic_seg"]
+            panoptic_img = panoptic_img.cpu().numpy()
+            ### The panoptic prediction is a tuple of (panoptic_img, panoptic_segments_info). If segments_info is None (or an empty list), create it by using the imantics library  
+            if isinstance(segments_info, list):
+                if len(segments_info) == 0:
+                    segments_info = None 
+            if segments_info is None:
+                segments_info = list()
+                panoptic_img = np.add(panoptic_img, 1)
+                panoptic_values = np.unique(panoptic_img)
+                for panoptic_value in panoptic_values:
+                    binary_mask = (panoptic_img == panoptic_value)
+                    # panoptic_value += 1
+                    image_raw_data = imantics_Image.from_path(path=input["file_name"])
+                    mask_data = imantics_Mask(binary_mask)
+                    image_raw_data.add(mask_data, category=imantics_Category("Category_name"))
+                    coco_json_panoptic_pred = image_raw_data.export(style="coco")
+                    polygon_coordinates = coco_json_panoptic_pred["annotations"][0]["segmentation"]
+                    bbox = [float(val) for val in coco_json_panoptic_pred["annotations"][0]["bbox"]]
+                    if "vitrolife" in input["file_name"].lower():
+                        meta_data = MetadataCatalog.get("vitrolife_dataset_train")
+                    else:
+                        meta_data = MetadataCatalog.get("ade20k_panoptic_train")
+                    assert "vitrolife" in input["file_name"].lower(), "Only vitrolife dataset is supported at the moment!!"
+                    panoptic_id_cont_id = meta_data.panoptic_dataset_id_to_contiguous_id
+                    category_id_object = np.min([panoptic_value, np.max(list(panoptic_id_cont_id.values()))])
+                    object_id = rgb2id(np.stack((panoptic_value,)*3, axis=-1))
+                    isthing = "PN" in meta_data.panoptic_classes[category_id_object]
+                    segments_info.append({  "id": int(object_id),
+                                            "category_id": int(category_id_object),
+                                            "isthing": bool(isthing),
+                                            "bbox": bbox,
+                                            "area": int(np.sum(binary_mask)),
+                                            "iscrowd": int(0),
+                                            "segmentation": polygon_coordinates,
+                                            "image_id": input["image_id"]})
+                
+            file_name = os.path.basename(input["file_name"])
+            file_name_png = os.path.splitext(file_name)[0] + ".png"
+            with io.BytesIO() as out:
+                Image.fromarray(id2rgb(panoptic_img)).save(out, format="PNG")
+                self._predictions.append({  "image_id": input["image_id"],
+                                            "file_name": file_name_png,
+                                            "png_string": out.getvalue(),
+                                            "segments_info": segments_info})
+
+
     def evaluate(self):
         comm.synchronize()
 
@@ -96,23 +273,29 @@ class Custom_Panoptic_Evaluator(COCOPanopticEvaluator):
         gt_json = PathManager.get_local_path(self._metadata.panoptic_json)
         gt_folder = PathManager.get_local_path(self._metadata.panoptic_root)
 
-        with tempfile.TemporaryDirectory(prefix="panoptic_eval") as pred_dir:
-            logger.info("Writing all panoptic predictions to {} ...".format(pred_dir))
-            for p in self._predictions:
-                with open(os.path.join(pred_dir, p["file_name"]), "wb") as f:
-                    f.write(p.pop("png_string"))
+        # with tempfile.TemporaryDirectory(prefix="panoptic_eval") as pred_dir:
+        pred_dir = tempfile.mkdtemp()
+        for p in self._predictions:
+            pass 
+            with open(os.path.join(pred_dir, p["file_name"]), "wb") as f:
+                p["png_string"]
+                f.write(p.pop("png_string"))
 
-            with open(gt_json, "r") as f:
-                json_data = json.load(f)
-            json_data["annotations"] = self._predictions
+        with open(gt_json, "r") as f:
+            json_data = json.load(f)
+        json_data["annotations"] = self._predictions
 
-            output_dir = self._output_dir or pred_dir
-            predictions_json = os.path.join(output_dir, "predictions.json")
-            with PathManager.open(predictions_json, "w") as f:
-                f.write(json.dumps(json_data,l sort_keys=True, indent=4))
+        output_dir = self._output_dir or pred_dir
+        predictions_json = os.path.join(output_dir, "predictions.json")
+        with PathManager.open(predictions_json, "w") as f:
+            f.write(json.dumps(json_data, sort_keys=True, indent=4))
 
-            with contextlib.redirect_stdout(io.StringIO()):
-                pq_res = pq_compute_own(gt_json, PathManager.get_local_path(predictions_json), gt_folder=gt_folder, pred_folder=pred_dir)
+        # with contextlib.redirect_stdout(io.StringIO()):
+        # gt_json_file=gt_json
+        # pred_json_file=PathManager.get_local_path(predictions_json)
+        # gt_folder=gt_folder
+        # pred_folder=pred_dir
+        pq_res = pq_compute_own(gt_json_file=gt_json, pred_json_file=PathManager.get_local_path(predictions_json), gt_folder=gt_folder, pred_folder=pred_dir)
 
         res = {}
         res["PQ"] = 100 * pq_res["All"]["pq"]
@@ -128,6 +311,7 @@ class Custom_Panoptic_Evaluator(COCOPanopticEvaluator):
         results = OrderedDict({"panoptic_seg": res})
         _print_panoptic_results(pq_res)
 
+        shutil.rmtree(pred_dir)
         return results
 
 

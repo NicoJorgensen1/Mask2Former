@@ -165,12 +165,18 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
         panoptic_mask = np.asarray(Image.open(panoptic_mask_filename))                              # Load the panoptic mask
         unique_values = np.unique(panoptic_mask).tolist()                                           # Read the unique values of the mask
         PN_value = {v:k for k,v in panoptic_class_labels.items()}["PN"]                             # Read the index value of where the PN is in the panoptic label dictionary
+        PN_panoptic_count = 1
         for unique_value in unique_values:                                                          # Iterate through all unique mask values 
             panoptic_obj = dict()                                                                   # Initiate a dict for each of the unqiue values in the panoptic mask 
             panoptic_obj["id"] = rgb2id(np.stack((unique_value,)*3, axis=-1))                       # The object id calculated as ID = R + G*256 + B*256**2
             panoptic_obj["category_id"] = np.min([unique_value, PN_value])                          # The category_id (class_id) is either the unique value or the value of a PN
             panoptic_obj["iscrowd"] = 0                                                             # No classes are set to be "iscrowd" in the vitrolife dataset
             panoptic_obj["isthing"] = True if panoptic_obj["category_id"] == PN_value else False    # If the category ID represents a PN, then 'isthing' is true 
+            panoptic_obj["label_name"] = panoptic_class_labels[np.min([unique_value, np.max(list(panoptic_class_labels.keys()))])],
+            panoptic_obj["label_name"] = str(panoptic_obj["label_name"][0])
+            if "PN" in panoptic_obj["label_name"].upper():
+                panoptic_obj["label_name"] = "{}{}".format(panoptic_obj["label_name"], PN_panoptic_count)
+                PN_panoptic_count += 1
             segments_info.append(panoptic_obj)                                                      # Append the dictionary to the segments_info list 
         
         # Create the current image/mask pair 
@@ -200,11 +206,11 @@ def register_vitrolife_data_and_metadata_func(debugging=False, panoptic=False):
     vitrolife_dataset_filepath = os.path.join(os.getenv("DETECTRON2_DATASETS"), "Vitrolife_dataset")    # Get the path to the vitrolife dataset
     thing_colors = [(185,220,255), (255,185,220), (220,255,185), (185,255,0),                       # Set colors for the ...
                     (0,185,220), (220,0,185), (115,45,115), (45,115,45)]                            # ... different numbers of PNs 
-    thing_id = {kk: kk for kk in list(thing_class_labels.keys())}                                   # Get a dictionary of continuous keys
+    thing_id = {kk+1: kk for kk in list(thing_class_labels.keys())}                                 # Get a dictionary of continuous keys
     stuff_colors = [(0,0,0), (255,0,0), (0,255,0), (0,0,255), (255,255,0), (185,220,255)]           # Set random colors for when the images will be visualized
     stuff_id = {kk: key for kk,key in enumerate(range(len(stuff_class_labels.keys())))}             # Create a dictionary with the class_id's as both keys and values
     panoptic_colors = stuff_colors[:-1] + thing_colors 
-    panoptic_id = {kk: key for kk,key in enumerate(list(panoptic_class_labels.keys()))}
+    panoptic_id = {key: key+1 for kk,key in enumerate(list(panoptic_class_labels.keys()))}
     # For panoptic registration
     image_root = os.path.join(vitrolife_dataset_filepath, "raw_images")
     panoptic_root = os.path.join(vitrolife_dataset_filepath, "annotations_panoptic_masks")
@@ -272,6 +278,7 @@ def register_vitrolife_data_and_metadata_func(debugging=False, panoptic=False):
                                                                         panoptic_json = reduced_panoptic_json_file_path,        # The filepath to the panoptic json 
                                                                         json_file = reduced_instance_json_file_path,            # The filepath to the instance json 
                                                                         image_root = image_root,
+                                                                        label_divisor = 1,
                                                                         num_files_in_dataset=len(dataset_copy))                 # Write the length of the dataset
     assert any(["vitrolife" in x for x in list(MetadataCatalog)]), "Datasets have not been registered correctly"                # Assuring the dataset has been registered correctly
 
