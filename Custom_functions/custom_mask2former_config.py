@@ -22,10 +22,12 @@ def accumulate_keys(dct):
 def createVitrolifeConfiguration(FLAGS):
     Mask2Former_dir = [x for x in sys_PATH if x.endswith("Mask2Former")][0]                         # Get the path of the Mask2Former directory
     config_dataset_type = "ade20k"
+    swin_type_on_gpu_server = "base"
     if "Semantic" in FLAGS.segmentation:
         segmentation_type = "semantic"
     if "Instance" in FLAGS.segmentation:
         segmentation_type = "instance"
+        swin_type_on_gpu_server = "large"
     if "Panoptic" in FLAGS.segmentation:
         segmentation_type = "panoptic"
         config_dataset_type = "coco"
@@ -34,7 +36,7 @@ def createVitrolifeConfiguration(FLAGS):
     add_deeplab_config(cfg)
     add_maskformer2_config(cfg)
     if FLAGS.use_transformer_backbone==True:                                                        # If the user chose the transformer backbone ...
-        swin_type = "tiny" if "nico" in Mask2Former_dir.lower() else "base"                         # If on home computer, use swin tiny. If on gpucluster, use swin base 
+        swin_type = "tiny" if "nico" in Mask2Former_dir.lower() else swin_type_on_gpu_server        # If on home computer, use swin tiny. If on gpucluster, use swin base 
         swin_config = [x for x in os.listdir(os.path.join(config_folder, "swin")) if all([swin_type in x, x.endswith(".yaml")])][-1]    # Find the corresponding swin config
         cfg.merge_from_file(os.path.join(config_folder, "swin", swin_config))                       # Merge the configuration with the swin configuration
     else:                                                                                           # If we are not using the swin backbone ...
