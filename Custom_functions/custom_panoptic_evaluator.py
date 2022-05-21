@@ -10,29 +10,71 @@ import shutil
 import os
 import tempfile
 import numpy as np 
+from tabulate import tabulate
 from collections import OrderedDict
 from detectron2.utils import comm
 from detectron2.utils.file_io import PathManager
-from detectron2.evaluation.panoptic_evaluation import COCOPanopticEvaluator, _print_panoptic_results
+from detectron2.evaluation.panoptic_evaluation import COCOPanopticEvaluator
 import multiprocessing
 from detectron2.data import MetadataCatalog
 from panopticapi.evaluation import PQStat, PQStatCat
 from matplotlib import pyplot as plt 
 from panopticapi.utils import get_traceback, rgb2id, id2rgb
-from PIL import Image
 from imantics import Image as imantics_Image
 from imantics import Mask as imantics_Mask
 from imantics import Category as imantics_Category
+from PIL import Image
 
+
+def _print_panoptic_results_own(pq_res):
+    headers = ["", "PQ", "SQ", "RQ", "#categories"]
+    data = []
+    for name in ["All", "Things", "Stuff"]:
+        row = [name] + [pq_res[name][k] * 100 for k in ["pq", "sq", "rq"]] + [pq_res[name]["n"]]
+        data.append(row)
+    table = tabulate(
+        data, headers=headers, tablefmt="pipe", floatfmt=".3f", stralign="center", numalign="center"
+    )
+    return table 
 
 logger = logging.getLogger(__name__)
 OFFSET = 256 * 256 * 256
 VOID = 255
 
 
+class PQStat_own(PQStat):
+    def pq_average(self, categories, isthing):
+        pq, sq, rq, n = 0, 0, 0, 0
+        per_class_results = {}
+        for label, label_info in categories.items():
+            if isthing is not None:
+                cat_isthing = int(label_info['isthing']) == 1
+                if isthing != cat_isthing:
+                    continue
+            iou = self.pq_per_cat[label].iou
+            tp = self.pq_per_cat[label].tp
+            fp = self.pq_per_cat[label].fp
+            fn = self.pq_per_cat[label].fn
+            if tp + fp + fn == 0:
+                per_class_results[label] = {'pq': 0.0, 'sq': 0.0, 'rq': 0.0}
+                continue
+            n += 1
+            pq_class = iou / (tp + 0.5 * fp + 0.5 * fn)
+            sq_class = iou / tp if tp != 0 else 0
+            rq_class = tp / (tp + 0.5 * fp + 0.5 * fn)
+            per_class_results[label] = {'pq': pq_class, 'sq': sq_class, 'rq': rq_class}
+            pq += pq_class
+            sq += sq_class
+            rq += rq_class
+
+        return {'pq': pq / n, 'sq': sq / n, 'rq': rq / n, 'n': n}, per_class_results
+
+
+# proc_id = 0
+# annotation_set = annotations_split[0]
 @get_traceback
 def pq_compute_single_core_own(proc_id, annotation_set, gt_folder, pred_folder, categories):
-    pq_stat = PQStat()
+    pq_stat = PQStat_own()
 
     idx = 0
     for gt_ann, pred_ann in annotation_set:
@@ -63,7 +105,7 @@ def pq_compute_single_core_own(proc_id, annotation_set, gt_folder, pred_folder, 
                 raise KeyError('In the image with ID {} segment with ID {} is presented in PNG and not presented in JSON.'.format(gt_ann['image_id'], label))
             pred_segms[label]['area'] = label_cnt
             pred_labels_set.remove(label)
-            if pred_segms[label]['category_id'] not in categories:
+            if str(pred_segms[label]['category_id']) not in [str(x) for x in list(categories.keys())]:
                 raise KeyError('In the image with ID {} segment with ID {} has unknown category_id {}.'.format(gt_ann['image_id'], label, pred_segms[label]['category_id']))
         if len(pred_labels_set) != 0:
             raise KeyError('In the image with ID {} the following segment IDs {} are presented in JSON and not presented in PNG.'.format(gt_ann['image_id'], list(pred_labels_set)))
@@ -127,6 +169,7 @@ def pq_compute_single_core_own(proc_id, annotation_set, gt_folder, pred_folder, 
     return pq_stat
 
 
+
 # Copy of pq_compute_multi_core used for computing the PQ metric. Primarily copied for debugging reasons.
 def pq_compute_multi_core_own(matched_annotations_list, gt_folder, pred_folder, categories):
     cpu_num = multiprocessing.cpu_count()
@@ -138,7 +181,7 @@ def pq_compute_multi_core_own(matched_annotations_list, gt_folder, pred_folder, 
         p = workers.apply_async(pq_compute_single_core_own,
                                 (proc_id, annotation_set, gt_folder, pred_folder, categories))
         processes.append(p)
-    pq_stat = PQStat()
+    pq_stat = PQStat_own()
     for p in processes:
         pq_stat += p.get()
     return pq_stat
@@ -261,6 +304,7 @@ class Custom_Panoptic_Evaluator(COCOPanopticEvaluator):
                                             "segments_info": segments_info})
 
 
+    # self = evaluators[Segment_type]
     def evaluate(self):
         comm.synchronize()
 
@@ -290,7 +334,6 @@ class Custom_Panoptic_Evaluator(COCOPanopticEvaluator):
         with PathManager.open(predictions_json, "w") as f:
             f.write(json.dumps(json_data, sort_keys=True, indent=4))
 
-        # with contextlib.redirect_stdout(io.StringIO()):
         # gt_json_file=gt_json
         # pred_json_file=PathManager.get_local_path(predictions_json)
         # gt_folder=gt_folder
@@ -309,11 +352,10 @@ class Custom_Panoptic_Evaluator(COCOPanopticEvaluator):
         res["RQ_st"] = 100 * pq_res["Stuff"]["rq"]
 
         results = OrderedDict({"panoptic_seg": res})
-        _print_panoptic_results(pq_res)
+        table = _print_panoptic_results_own(pq_res)
 
         shutil.rmtree(pred_dir)
+        print(table)
         return results
-
-
 
 

@@ -23,12 +23,6 @@ assert os.path.isdir(dataset_dir), "The dataset directory doesn't exist in the c
 os.environ["DETECTRON2_DATASETS"] = dataset_dir
 
 
-##########
-# The variables PN_pred and PN_true are now dictionaries, not lists - be aware of that !!!
-
-
-
-
 # Import important libraries
 # import tracemalloc
 # tracemalloc.start()
@@ -79,12 +73,14 @@ if FLAGS.inference_only==False:
         format(best_epoch, FLAGS.eval_metric, new_best, "All best validation results:".upper().ljust(30)), logs=log_file)
     printAndLog(input_to_write=getBestEpochResults(history, best_epoch), logs=log_file, prefix="", length=15)
 if "vitrolife" in FLAGS.dataset_name.lower():                                                           # As only the Vitrolife dataset includes a test set...
-    PN_accuracy = np.divide(np.sum(np.asarray(PN_pred) == np.asarray(PN_true)), len(PN_true))           # Compute the accuracy of computed PNs 
     printAndLog(input_to_write="All test results:".upper().ljust(30), logs=log_file)
     printAndLog(input_to_write=test_history, logs=log_file, prefix="", length=15)
+    PN_accuracy = dict()
+    for segment_type in FLAGS.segmentation:
+        PN_accuracy[segment_type] = np.divide(np.sum(np.asarray(PN_pred[segment_type]) == np.asarray(PN_true[segment_type])), len(PN_true[segment_type])) # Compute the accuracy of computed PNs 
+        printAndLog(input_to_write="The PN counts of the test dataset has an accuracy of {:.3f}".format(PN_accuracy[segment_type]), logs=log_file, postfix="\n")
     test_history["PN_pred"] = PN_pred                                                                   # Assign the list of predicted PNs to the test history
     test_history["PN_true"] = PN_true                                                                   # Assign the list of true PNs to the test history 
-    printAndLog(input_to_write="The PN counts of the test dataset has an accuracy of {:.3f}".format(PN_accuracy), logs=log_file, postfix="\n")
 
 # Remove all metrics.json files and the default log-file and write config to file, visualize the images and zip output directory
 [os.remove(os.path.join(cfg.OUTPUT_DIR, x)) for x in os.listdir(cfg.OUTPUT_DIR) if "metrics" in x.lower() and x.endswith(".json")]  # Remove all metrics files

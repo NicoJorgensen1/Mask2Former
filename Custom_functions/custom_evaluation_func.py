@@ -1,5 +1,4 @@
 # Import the libraries and functions used here
-from curses import meta
 import os
 import torch 
 import sys 
@@ -7,7 +6,7 @@ import numpy as np
 from copy import deepcopy 
 import tqdm 
 from detectron2.engine.defaults import DefaultPredictor
-from detectron2.evaluation import SemSegEvaluator, COCOPanopticEvaluator
+from detectron2.evaluation import SemSegEvaluator 
 from custom_print_and_log_func import printAndLog
 from mask2former import MaskFormerInstanceDatasetMapper
 from mask2former import InstanceSegEvaluator
@@ -15,6 +14,7 @@ from detectron2.data import build_detection_test_loader
 from detectron2.data import MetadataCatalog
 from custom_image_batch_visualize_func import NMS_pred, putModelWeights
 from custom_panoptic_evaluator import Custom_Panoptic_Evaluator
+from panopticapi.utils import id2rgb
 
 # Define a function to change a certain value in a numpy array into another value
 def changeValue(inp, origVal=-1, newVal=0):                                                                     # The function will take a numpy array as input and an original value that must be changed
@@ -80,7 +80,8 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
     predictor = DefaultPredictor(config_2)                                                                      # Create an instance of the default predictor 
 
     # Create a progress bar to keep track on the evaluation
-    PN_pred_count, PN_true_count = dict(), dict()                                                               # Initiate dictionaries 
+    PN_pred_count = {x: list() for x in FLAGS.segmentation}
+    PN_true_count = deepcopy(PN_pred_count)
     for kk, data_batch in tqdm.tqdm(enumerate(dataloader), total=total_runs, unit="img", position=0, colour="green",  ascii=True,
         postfix="Evaluating the {:s} dataset".format(data_split), file=sys.stdout, desc="Evaluating all {} images".format(total_runs),
         bar_format="{desc}  | {percentage:3.0f}% | {bar:35}| {n_fmt}/{total_fmt} | [Spent: {elapsed}. Remaining: {remaining} | {postfix}]"):    # Iterate through all batches in the dataloader
@@ -93,23 +94,31 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
                 evaluators[Segment_type].process(inputs=[data], outputs=[y_pred])                               # Process the results by adding the results to the confusion matrix
             
             if "Panoptic" in FLAGS.segmentation:
-                # tqdm.tqdm.write("The sum of the prediction is: {}. The shape is {}".format(y_pred["panoptic_seg"][0].sum().cpu().numpy().item(), y_pred["panoptic_seg"][0].cpu().numpy().shape))
-                pass 
+                if "vitrolife" not in FLAGS.dataset_name.lower():
+                    raise(NotImplementedError("Panoptic segmentation only supported for the Vitrolife dataset at the moment"))
+                pan_img_pred = id2rgb(y_pred["panoptic_seg"][0].cpu().numpy())[:,:,0]
+                unique_values = np.unique(pan_img_pred).tolist() 
+                PN_count = 0
+                for unique_value in unique_values:
+                    if "PN" in meta_data.panoptic_classes[unique_value].upper():
+                        PN_count += 1
+                PN_pred_count["Panoptic"].append(PN_count)
+                PN_true_count["Panoptic"].append(int(data["image_custom_info"]["PN_image"])) 
 
             # Count PN's for semantic segmentation 
             if all(["Semantic" in FLAGS.segmentation, "vitrolife" in dataset_name.lower(), "test" in data_split.lower()]):
                 out_img = torch.nn.functional.softmax(torch.permute(y_pred["sem_seg"], (1,2,0)), dim=-1)        # Get the softmax output of the predicted image
                 out_pred_img = torch.argmax(out_img, dim=-1).cpu().numpy()                                      # Convert the predicted image into a numpy mask 
                 PN_pred_area = np.sum(out_pred_img == np.where(np.in1d(meta_data.stuff_classes, "PN"))[0].item())   # Count the area of predicted PNs
-                PN_pred_count["Semantic"] = int(np.ceil(np.divide(PN_pred_area, FLAGS.PN_mean_pixel_area)))     # Compute the predicted number of PN's 
-                PN_true_count["Semantic"] = int(data["image_custom_info"]["PN_image"])                          # Get the true number of PN's 
+                PN_pred_count["Semantic"].append(int(np.ceil(np.divide(PN_pred_area, FLAGS.PN_mean_pixel_area))))   # Compute the predicted number of PN's 
+                PN_true_count["Semantic"].append(int(data["image_custom_info"]["PN_image"]))                    # Get the true number of PN's 
 
             # Count PN's for instance segmentation
             if all(["Instance" in FLAGS.segmentation, "vitrolife" in dataset_name.lower(), "test" in data_split.lower()]):
                 y_pred = y_pred["instances"].get_fields()
                 PN_masks = NMS_pred(y_pred_dict=y_pred, data=data, meta_data=meta_data, conf_thresh=FLAGS.conf_threshold, IoU_thresh=FLAGS.IoU_threshold) 
-                PN_pred_count["Instance"] = int(len(PN_masks))
-                PN_true_count["Instance"] = int(data["image_custom_info"]["PN_image"])
+                PN_pred_count["Instance"].append(int(len(PN_masks)))
+                PN_true_count["Instance"].append(int(data["image_custom_info"]["PN_image"]))
             
             tqdm.tqdm.desc = "Image {:d}/{:d} ".format(kk+1, total_runs)                                        # Update the description of the progress bar
         if kk >= total_runs:                                                                                    # If we have performed the total number of runs before emptying the dataloader (e.g. train datasplit during HPO) ...
@@ -144,17 +153,6 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
             eval_results["Instance"][task_key]["precision_IoU50"] = np.mean(a=eval_results["Instance"][task_key]["precision"][0,:,:,0,1], axis=1)   # The precision for IoU=0.50, Recall=[0,0.01,1], all classes and object sizes and 10 detections pr image 
             for class_id, class_lbl in zip(MetadataCatalog.get(dataset_name).thing_dataset_id_to_contiguous_id.keys(), MetadataCatalog.get(dataset_name).thing_classes):
                 eval_results["Instance"][task_key]["precision_IoU50_"+class_lbl] = np.mean(a=eval_results["Instance"][task_key]["precision"][0,:,class_id-1,:,1], axis=1) # The precision for the given class with IoU@50, all recall values, all object sizes and 10 detections pr image 
-        
-    printAndLog(input_to_write="evaluation is done, it was a great success", logs=FLAGS.log_file)
 
-    try:
-        if "Semantic" in FLAGS.segmentation:
-            evaluators["Semantic"] = deepcopy(semantic_evaluator)
-        if "Instance" in FLAGS.segmentation:
-            evaluators["Instance"] = deepcopy(instance_evaluator)
-        if "Panoptic" in FLAGS.segmentation:
-            evaluators["Panoptic"] = deepcopy(panoptic_evalutator)
-    except:
-        pass 
     # Return the metrics
     return eval_results, dataloader, evaluators, PN_pred_count, PN_true_count

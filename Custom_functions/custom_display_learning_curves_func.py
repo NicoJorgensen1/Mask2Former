@@ -9,9 +9,6 @@ from copy import deepcopy                                                       
 from custom_image_batch_visualize_func import extractNumbersFromString                                  # Function to extract numbers from a string
 from detectron2.data import MetadataCatalog                                                             # Catalogs for metadata for registered datasets
 
-# config = cfg
-# config.OUTPUT_DIR = "/mnt/c/Users/Nico-/Documents/Python_Projects/Mask2Former/output_vitrolife_01_24_27APR2022"
-
 
 # Define a function to compute the moving average of an input array or list
 def mov_avg_array(inp_array, mov_of_last_n_elements=4, output_last_n_elements=1):                       # Define a function to compute the moving average of an array or a list
@@ -62,37 +59,46 @@ def changeClassNameForClassIdxFunc(key, config):
 
 
 # Create a function to extract the list of lists containing the keys that are relevant to show
-def extractRelevantHistoryKeys(history):
+def extractRelevantHistoryKeys(history, FLAGS):
+    # Get the generic keys used for all segmentation types 
     loss_total = [key for key in history.keys() if "total_loss" in key.lower()]                         # Find all keys with loss_ce
     loss_ce = [key for key in history.keys() if "loss_ce" in key.lower() and key.endswith("ce")]        # Find all keys with loss_ce
     loss_dice = [key for key in history.keys() if "loss_dice" in key.lower() and key.endswith("dice")]  # Find all keys with loss_dice
     loss_mask = [key for key in history.keys() if "loss_mask" in key.lower() and key.endswith("mask")]  # Find all keys with loss_mask
     learn_rate = [key for key in history.keys() if "lr" in key.lower() and "val" not in key.lower()]    # Find the training learning rate
-    AP_total = [key for key in history.keys() if key.endswith("AP")]
-    AP_50 = [key for key in history.keys() if "AP" in key and key.endswith("50")]
-    AP_75 = [key for key in history.keys() if "AP" in key and key.endswith("75")]
-    AP_Small = [key for key in history.keys() if "AP" in key and key.endswith("s")]
-    AP_Medium = [key for key in history.keys() if "AP" in key and key.endswith("m")]
-    AP_Large = [key for key in history.keys() if "AP" in key and key.endswith("l")]
-    AP_Well  = [key for key in history.keys() if "AP" in key and key.endswith("C1")]
-    AP_Zona  = [key for key in history.keys() if "AP" in key and key.endswith("C2")]
-    AP_PV_space  = [key for key in history.keys() if "AP" in key and key.endswith("C3")]
-    AP_Cell = [key for key in history.keys() if "AP" in key and key.endswith("C4")]
-    AP_PN = [key for key in history.keys() if "AP" in key and key.endswith("C5")]
-    Precision_IoU50 = [key for key in history.keys() if "precision" in key and key.endswith("50")]
-    Precision_IoU50_Well = [key for key in history.keys() if "precision" in key and key.endswith("C1")]
-    Precision_IoU50_Zona = [key for key in history.keys() if "precision" in key and key.endswith("C2")]
-    Precision_IoU50_PV_space = [key for key in history.keys() if "precision" in key and key.endswith("C3")]
-    Precision_IoU50_Cell = [key for key in history.keys() if "precision" in key and key.endswith("C4")]
-    Precision_IoU50_PN = [key for key in history.keys() if "precision" in key and key.endswith("C5")]
-    
-    # hist_keys_list = [loss_total, AP_total, AP_50, Precision_IoU50, loss_ce, loss_dice, loss_mask, 
-    #         learn_rate, AP_75, AP_Small, AP_Medium, AP_Large, AP_Well, AP_Zona, AP_PV_space, AP_Cell,
-    #         AP_PN, Precision_IoU50_Well, Precision_IoU50_Zona, Precision_IoU50_PV_space,
-    #         Precision_IoU50_Cell, Precision_IoU50_PN]
-    
-    hist_keys_list = [loss_total, AP_total, Precision_IoU50, loss_ce,
+
+    # Get the instance keys 
+    AP_total = [key for key in history.keys() if key.endswith("AP")]                                    # Find the total average precision AP@0.50:0.05:0.95
+    AP_50 = [key for key in history.keys() if "AP" in key and key.endswith("50")]                       # Find the average precision AP50
+    AP_75 = [key for key in history.keys() if "AP" in key and key.endswith("75")]                       # Find the AP75
+    Precision_IoU50 = [key for key in history.keys() if "precision" in key and key.endswith("50")]      # Get the precision-recall curve from AP50
+
+    # Get the panoptic keys 
+    PQ_SQ_RQ_all = [key for key in history.keys() if any([key.endswith(x) for x in ["PQ", "RQ", "SQ"]])]
+    PQ_SQ_RQ_things = [key for key in history.keys() if any([x in key for x in ["PQ", "RQ", "SQ"]]) and key.endswith("th")]
+    PQ_SQ_RQ_stuff = [key for key in history.keys() if any([x in key for x in ["PQ", "RQ", "SQ"]]) and key.endswith("st")]
+    PQ_all = [key for key in history.keys() if key.endswith("PQ")]
+    SQ_all = [key for key in history.keys() if key.endswith("SQ")]
+    RQ_all = [key for key in history.keys() if key.endswith("RQ")]
+    PQ_things = [key for key in history.keys() if key.endswith("th") and "PQ" in key]
+    SQ_things = [key for key in history.keys() if key.endswith("th") and "SQ" in key]
+    RQ_things = [key for key in history.keys() if key.endswith("th") and "RQ" in key]
+    PQ_stuff = [key for key in history.keys() if key.endswith("st") and "PQ" in key]
+    SQ_stuff = [key for key in history.keys() if key.endswith("st") and "SQ" in key]
+    RQ_stuff = [key for key in history.keys() if key.endswith("st") and "RQ" in key]
+    SQ_RQ_all = [key for key in history.keys() if any([key.endswith(x) for x in ["RQ", "SQ"]])]
+    SQ_RQ_things = [key for key in history.keys() if any([x in key for x in ["RQ", "SQ"]]) and key.endswith("th")]
+    SQ_RQ_stuff = [key for key in history.keys() if any([x in key for x in ["RQ", "SQ"]]) and key.endswith("st")]
+
+    # Return the list of lists of keys 
+    if len(FLAGS.segmentation) > 1:
+        raise(NotImplementedError("Only one type of segmentation at a time is allowed at the moment"))
+    if "Instance" in FLAGS.segmentation:
+        hist_keys_list = [loss_total, AP_total, Precision_IoU50, loss_ce,
                         loss_dice, loss_mask, AP_50, AP_75, learn_rate]
+    if "Panoptic" in FLAGS.segmentation:
+        hist_keys_list = [loss_total, PQ_all, SQ_RQ_all, PQ_things, SQ_RQ_things, PQ_stuff,
+            SQ_RQ_stuff, loss_ce, loss_dice, loss_mask, learn_rate]
     return hist_keys_list
 
 
@@ -119,24 +125,48 @@ def combineDataToHistoryDictionaryFunc(config, eval_metrics=None, data_split="tr
             else: history[data_split+"_"+key].append(eval_metrics[old_key])                             # Append the current key-value from the metrics_train to the corresponding list 
     return history
 
+# for key in history.keys():
+#     print(key)
+
+# try:
+#     config = config
+# except:
+#     config = cfg
+# metrics_train = eval_train_results
+# metrics_eval = eval_val_results
+# history = None
+# history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results, metrics_eval=eval_val_results, history=history)
+
 
 # Function to display learning curves
 def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):                             # Define a function to visualize the learning curves
-    if len(FLAGS.segmentation) == 1:                                                                    # Only one type of segmentation supported at the moment 
-        metrics_train = metrics_train[FLAGS.segmentation[0]]["segm"]
-        metrics_eval = metrics_eval[FLAGS.segmentation[0]]["segm"]
-
+    if len(FLAGS.segmentation) > 1:
+        raise(NotImplementedError("Only one type of segmentation at a time is allowed at the moment"))
+    if "Instance" in FLAGS.segmentation:
+        segment_key_type = "segm" 
+    if "Panoptic" in FLAGS.segmentation:
+        segment_key_type = "panoptic_seg"
+    metrics_train = metrics_train[FLAGS.segmentation[0]][segment_key_type]
+    metrics_eval = metrics_eval[FLAGS.segmentation[0]][segment_key_type]
+        
     # Create history and list of relevant history keys
     if FLAGS.inference_only==False or FLAGS.hp_optim==False:
         history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_train, data_split="train", history=history)
     history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_eval, data_split="val", history=history)
-    hist_keys = extractRelevantHistoryKeys(history)
-    ax_titles = ["Total_loss", "AP@.5:.05:.95", "Precision_IoU@50", "Loss_CE",                          # Create titles for the axes, ...
-                    "Loss_DICE", "Loss_mask", "AP50", "AP75", "Learning_rate"]                          # ... legends and y labels
+
+    hist_keys = extractRelevantHistoryKeys(history, FLAGS)
+    if "Instance" in FLAGS.segmentation:
+        ax_titles = ["Total_loss", "AP@.5:.05:.95", "Precision_IoU@50", "Loss_CE",
+                "Loss_DICE", "Loss_mask", "AP50", "AP75", "Learning_rate"] 
+        n_cols = (3,3,3)
+    if "Panoptic" in FLAGS.segmentation:
+        ax_titles = ["Total_loss", "PQ_all", "RQ_SQ_all", "PQ_things", "SQ_RQ_things", "PQ_stuff", 
+                    "SQ_RQ_stuff", "Loss_CE", "Loss_DICE", "Loss_mask", "Learning_rate"]
+        n_cols = (3,4,4)
     colors = ["blue", "red", "black", "green", "magenta", "cyan", "yellow", "deeppink", "purple",       # Create colors for ... 
                 "peru", "darkgrey", "gold", "springgreen", "orange", "crimson", "lawngreen"]            # ... the line plots
-    n_rows, n_cols, ax_count = 3, (3,3,3), 0                                                            # Initiate values for the number of rows and columns
-    if FLAGS.num_classes > 10:                                                                          # If there are more than 10 classes (i.e. for ADE20K_dataset) ...
+    n_rows, ax_count = 3, 0                                                                             # Initiate values for the number of rows and ax_counter 
+    if FLAGS.num_classes > 10 and "Instance" in FLAGS.segmentation:                                     # If there are more than 10 classes (i.e. for ADE20K_dataset) ...
         n_rows, n_cols = 3, (4,4,4)                                                                     # ... the number of rows and columns gets reduced ...
         class_names = MetadataCatalog[config.DATASETS.TRAIN[0]].thing_classes                           # Get the class names for the dataset
         ax_tuple = [(ii,x) for (ii,x) in enumerate(ax_titles) if "PV_space" not in x and not any([y in x for y in class_names])]    # ... remove the class_specific ax_titles
@@ -158,7 +188,7 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
             for kk, key in enumerate(sorted(hist_keys[ax_count], key=str.lower)):                       # Looping through all keys in the history dict that will be shown on the current subplot axes
                 if np.max(history[key]) > y_top_val:                                                    # If the maximum value in the array is larger than the current y_top_val ...
                     y_top_val = np.ceil(np.max(history[key])/2)*2                                       # ... y_top_val is updated and rounded to the nearest 2
-                start_val = np.min(history["val_epoch_num"])-(0 if any([x in key.lower() for x in ["ap", "precision"]]) else 1)   # The evaluation metrics must be plotted from after the first epoch, the losses from epoch=0
+                start_val = np.min(history["val_epoch_num"])-(0 if any([x in key.lower() for x in ["ap", "precision", "pq", "sq", "rq"]]) else 1)   # The evaluation metrics must be plotted from after the first epoch, the losses from epoch=0
                 x_vals = np.linspace(start=start_val, stop=np.max(history["val_epoch_num"]), num=len(history[key])) # Create the x-axis values as a linearly spaced array from epoch start_val to the latest epoch 
                 if "precision" in key:                                                                  # If "precision" is in the key it means we are plotting a precision-recall curve  ...
                     x_vals = np.round(np.linspace(start=0, stop=1, num=len(history[key])), 2)           # ... with equally spaced recall values of R=[0, 0.01, 1] 
@@ -170,9 +200,12 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
             plt.legend(sorted([key for key in hist_keys[ax_count]], key=str.lower),                     # Create a legend for the subplot with ...
                     framealpha=0.35, loc="best" if len(hist_keys[ax_count])<4 else "upper left")        # ... the history keys displayed
             ax_count += 1                                                                               # Increase the subplot counter
-            if y_top_val <= 0.05 and "lr" not in key.lower(): plt.ylim(bottom=-0.05, top=0.05)          # If the max y-value is super low, the limits are changed ...
-            elif y_top_val < 10: plt.ylim(bottom=0, top=y_top_val*1.075)                                # If the max y-value is low, the limits are changed ...
-            else: plt.ylim(bottom=0, top=y_top_val)                                                     # Set the final, updated y_top_value as the y-top-limit on the current subplot axes
+            if y_top_val <= 0.05 and "lr" not in key.lower():                                           # If the max y-value is super low ...
+                plt.ylim(bottom=-0.05, top=0.05)                                                        # ... the limits are changed ...
+            elif y_top_val < 10:                                                                        # If the max y-value is low ...
+                plt.ylim(bottom=0, top=y_top_val*1.075)                                                 # ... the limits are changed ...
+            else:                                                                                       # Otherwise ... 
+                plt.ylim(bottom=0, top=y_top_val)                                                       # ... set the final, updated y_top_value as the y-top-limit on the current subplot axes
             if "lr" in key.lower():                                                                     # If we are plotting the learning rate ...
                 plt.ylim(bottom=np.min(history[key])*0.9, top=np.max(history[key])*1.075)               # ... the y_limits are changed
                 plt.yscale('log')                                                                       # ... the y_scale will be logarithmic
@@ -183,13 +216,8 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
     return history                                                                                      # The history dictionary is returned
 
 
-# config=cfg
-# metrics_train=eval_train_results["segm"]
-# metrics_eval=eval_val_results["segm"]
-# history = None
-# history = show_history(config=cfg, FLAGS=FLAGS, metrics_train=eval_train_results["segm"], metrics_eval=eval_val_results["segm"], history=None)
-
+# config = cfg
+# config.OUTPUT_DIR = "/mnt/c/Users/Nico-/Documents/Python_Projects/Mask2Former/output_vitrolife_01_24_27APR2022"
 # history_file = [os.path.join(config.OUTPUT_DIR,x) for x in os.listdir(config.OUTPUT_DIR) if "history" in x.lower()][0]
 # with open(history_file, "rb") as f:
 #     history = pickle.load(f)
-

@@ -21,20 +21,25 @@ def accumulate_keys(dct):
 # Define a function to create a custom configuration in the chosen config_dir and takes a namespace option
 def createVitrolifeConfiguration(FLAGS):
     Mask2Former_dir = [x for x in sys_PATH if x.endswith("Mask2Former")][0]                         # Get the path of the Mask2Former directory
-    if "Semantic" in FLAGS.segmentation: segmentation_type = "semantic"
-    if "Instance" in FLAGS.segmentation: segmentation_type = "instance"
-    if "Panoptic" in FLAGS.segmentation: segmentation_type = "panoptic"
-    config_folder = os.path.join(Mask2Former_dir, "configs", "ade20k", segmentation_type+"-segmentation")   # Get the path of the ade20k configs 
+    config_dataset_type = "ade20k"
+    if "Semantic" in FLAGS.segmentation:
+        segmentation_type = "semantic"
+    if "Instance" in FLAGS.segmentation:
+        segmentation_type = "instance"
+    if "Panoptic" in FLAGS.segmentation:
+        segmentation_type = "panoptic"
+        config_dataset_type = "coco"
+    config_folder = os.path.join(Mask2Former_dir, "configs", config_dataset_type, segmentation_type+"-segmentation")   # Get the path of the ade20k configs 
     cfg = get_cfg()
     add_deeplab_config(cfg)
     add_maskformer2_config(cfg)
     if FLAGS.use_transformer_backbone==True:                                                        # If the user chose the transformer backbone ...
-        swin_type = "tiny" if "nico" in Mask2Former_dir.lower() else "large"                        # If on home computer, use swin tiny. If on gpucluster, use swin large
+        swin_type = "tiny" if "nico" in Mask2Former_dir.lower() else "base"                         # If on home computer, use swin tiny. If on gpucluster, use swin base 
         swin_config = [x for x in os.listdir(os.path.join(config_folder, "swin")) if all([swin_type in x, x.endswith(".yaml")])][-1]    # Find the corresponding swin config
         cfg.merge_from_file(os.path.join(config_folder, "swin", swin_config))                       # Merge the configuration with the swin configuration
     else:                                                                                           # If we are not using the swin backbone ...
         cfg.merge_from_file(os.path.join(config_folder, "maskformer2_R50_bs16_160k.yaml"))          # ... instead merge with the ResNet config 
-    cfg.merge_from_file(os.path.join(config_folder, "Base-ADE20K-{}Segmentation.yaml".format(segmentation_type.capitalize())))  # Merge with the base config for ade20K dataset. This is the config selecting that we use the ADE20K dataset
+    cfg.merge_from_file(os.path.join(config_folder, "Base-{}-{}Segmentation.yaml".format(config_dataset_type.upper(), segmentation_type.capitalize()))) # Merge with the base config for the dataset.
 
     if "vitrolife" in FLAGS.dataset_name.lower():                                                   # If we are working on the Vitrolife dataset ... 
         cfg["DATASETS"]["TRAIN"] = ("vitrolife_dataset_train",)                                     # ... define the training dataset by using the config as a dictionary

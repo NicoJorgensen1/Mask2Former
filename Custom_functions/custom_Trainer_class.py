@@ -10,7 +10,7 @@ import torch
 import numpy as np 
 from typing import Any, Dict, List, Set
 from PIL import Image 
-from mask2former import MaskFormerInstanceDatasetMapper, InstanceSegEvaluator
+from mask2former import MaskFormerInstanceDatasetMapper, MaskFormerPanopticDatasetMapper, COCOPanopticNewBaselineDatasetMapper
 from detectron2.utils import comm
 from detectron2.data import MetadataCatalog, build_detection_train_loader
 from detectron2.data import transforms as T
@@ -23,8 +23,9 @@ from detectron2.engine.hooks import PeriodicWriter
 
 
 # Define a function that will return a list of augmentations to use for training
-def custom_augmentation_mapper(config, is_train=True):
-    if not is_train: transform_list = []                                    # If we are validating the images, we won't use data augmentation
+def custom_augmentation_mapper(config, is_train=True, segmentation_type="instance"):
+    if not is_train:                                                        # If we are validating the images ...
+        transform_list = []                                                 # ... we won't use data augmentation
     else:
         transform_list = [                                                  # Initiate the list of image data augmentations to use
             T.Resize((500,500), Image.BILINEAR),                            # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.Resize
@@ -37,8 +38,10 @@ def custom_augmentation_mapper(config, is_train=True):
             T.RandomFlip(prob=0.25, horizontal=False, vertical=True),       # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomLighting  
             T.RandomCrop("relative", (0.75, 0.75)),                         # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomCrop
             T.Resize((500,500), Image.BILINEAR)]                            # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.Resize
+    # if "instance" in segmentation_type.lower():
     custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=True, augmentations=transform_list)    # Create the mapping from data dictionary to augmented training image
-    # Something has to be done to the bounding boxes before this mapper can be used ... 
+    # if "panoptic" in segmentation_type.lower():
+    #     custom_mapper = COCOPanopticNewBaselineDatasetMapper(config, is_train=True, tfm_gens=transform_list)
     return custom_mapper
 
 

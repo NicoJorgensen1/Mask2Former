@@ -45,6 +45,8 @@ def do_flop(cfg, args):
         if args.use_fixed_input_size and isinstance(cfg, CfgNode):
             import torch
             crop_size = cfg.INPUT.CROP.SIZE[0]
+            if isinstance(crop_size, float) and crop_size < int(1):
+                crop_size = int(data[0]["image"].shape[-1])
             data[0]["image"] = torch.zeros((3, crop_size, crop_size))
         flops = FlopCountAnalysis(model, data)
         if idx > 0:

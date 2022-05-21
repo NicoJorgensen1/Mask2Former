@@ -1,9 +1,11 @@
+from enum import unique
 import os
 import re
 import torch
 import numpy as np
 import cv2
 import matplotlib
+from PIL import Image 
 from matplotlib import pyplot as plt
 from tqdm import tqdm                                                                       # Used to set a progress bar
 from copy import deepcopy
@@ -13,6 +15,7 @@ from detectron2.engine.defaults import DefaultPredictor
 from mask2former.modeling.matcher import HungarianMatcher
 from custom_print_and_log_func import printAndLog                                           # Function to log results
 from custom_Trainer_class import custom_augmentation_mapper as custom_mapper                # A function that returns a custom mapper using data augmentation
+from panopticapi.utils import rgb2id, id2rgb
 
 
 # Move the figure to the wanted position when displaying
@@ -80,16 +83,25 @@ def sort_dictionary_by_PN(data):
 
 
 # Function to create an image from a list of masks and labels
-def draw_mask_image(mask_list, lbl_list, meta_data):
-    class_colors = meta_data.thing_colors                                                   # Get the colors that the classes must be visualized with 
-    class_names = deepcopy(meta_data.thing_classes)                                         # Read the class names present in the dataset
+def draw_mask_image(mask_list, lbl_list, meta_data, segment_type="Instance"):
+    if segment_type.lower() == "instance":
+        class_colors = deepcopy(meta_data.thing_colors)                                     # Get the colors that the classes must be visualized with 
+        class_names = deepcopy(meta_data.thing_classes)                                     # Read the class names present in the dataset
+    if segment_type.lower() == "panoptic":
+        class_colors = deepcopy(meta_data.panoptic_colors)
+        class_names = deepcopy(meta_data.panoptic_classes) 
+        lbl_list = deepcopy(np.subtract(lbl_list, 1))
+        if class_names[lbl_list[-1]].upper() == "PN":
+            PNs_in_image = (lbl_list == lbl_list[-1]).sum()
+            class_names = class_names + np.repeat(["PN"], PNs_in_image-1).tolist()
     final_im = np.zeros(shape=mask_list[0].shape+(3,), dtype=np.uint8)                      # Initiate a colored image to show the masks as a single image 
     PN_count = 0                                                                            # Make a counter to keep track of the PN's in the current image
     for lbl, mask in zip(lbl_list, mask_list):                                              # Iterate through the labels and masks
         class_name = class_names[lbl]                                                       # Find the class name of the current object 
-        col_idx = np.where(np.in1d(class_names, class_name))[0].item() + PN_count           # Compute which color the current object will have in the final image 
+        col_idx = np.where(np.in1d(class_names, class_name))[0][0] + PN_count               # Compute which color the current object will have in the final image 
         col = class_colors[col_idx]                                                         # Extract the thing color needed for the current object
-        if len(np.where(mask)[0]) < 4: continue                                             # If less than four points are positive in the current mask, skip this mask, as we then can't draw a bounding box
+        if len(np.where(mask)[0]) < 4:                                                      # If less than four points are positive in the current mask ...
+            continue                                                                        # ... skip this mask, as we then can't draw a bounding box
         if class_name == "PN":                                                              # If the current object is a PN ...
             PN_count += 1                                                                   # ... increase the PN counter
         final_im[mask.astype(bool)] = col                                                   # Assign all pixels from the current object with the specified pixel color value 
@@ -175,7 +187,9 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             dataset_dicts = dataset_dicts[:FLAGS.num_images]                                # We'll maximally show the first FLAGS.num_images images
         else:                                                                               # Else ...
             dataset_dicts = DatasetCatalog.get("ade20k_sem_seg_{:s}".format(data_split))    # ... we use the ADE20K dataset
-        data_mapper = custom_mapper(config=config, is_train="train" in data_split)          # Using my own custom data mapper, only use data augmentation on training dataset 
+        if len(FLAGS.segmentation) > 1:
+            raise(NotImplementedError("Only one type of segmentation at a time is allowed at the moment"))
+        data_mapper = custom_mapper(config=config, is_train="train" in data_split, segmentation_type=FLAGS.segmentation[0])   # Using my own custom data mapper, only use data augmentation on training dataset 
         dataloader = build_detection_train_loader(dataset_dicts, mapper=data_mapper, total_batch_size=np.min([FLAGS.num_images, len(dataset_dicts)]), num_workers=1)   # Create the dataloader
         data_batch = next(iter(dataloader))                                                 # Extract the next batch from the dataloader
     dataset_name = config.DATASETS.TRAIN[0] if "train" in data_split else config.DATASETS.TEST[0]   # Extract the dataset name 
@@ -189,25 +203,52 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
     matcher = HungarianMatcher(cost_class=FLAGS.class_loss_weight, cost_dice=FLAGS.dice_loss_weight,    # Create an instance of the ...
             cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)     # ... Hungarian Matcher class
     img_ytrue_ypred = {"input": list(), "y_pred": list(), "y_true": list(), "PN": list()}   # Initiate a dictionary to store the input images, ground truth masks and the predicted masks
+    # data = data_batch[0]
     for data in data_batch:                                                                 # Iterate over each data sample in the batch from the dataloade
         img = torch.permute(data["image"], (1,2,0)).numpy()                                 # Make input image numpy format and [H,W,C]
         
         # The ground truth prediction image 
-        true_classes = data["instances"].get_fields()["gt_classes"].numpy().tolist()        # Get the true class labels for the instances on the current image
-        true_masks = [x.astype(bool) for x in data["instances"].get_fields()["gt_masks"].numpy()]   # Get the true binary masks for the instances on the current image
-        if len(true_classes) < 1: y_true = np.zeros_like(a=img)                             # If no objects are in the image, the y_true is simply a black image 
-        else: y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data)  # If objects are present, create a mask image for the true masks
-        # plt.imshow(y_true)
-        # plt.show(block=False)
+        if len(FLAGS.segmentation) > 1:
+            raise(NotImplementedError("Only one type of segmentation at a time is allowed at the moment"))
+        if "Instance" in FLAGS.segmentation:
+            true_classes = data["instances"].get_fields()["gt_classes"].numpy().tolist()    # Get the true class labels for the instances on the current image
+            true_masks = [x.astype(bool) for x in data["instances"].get_fields()["gt_masks"].numpy()]   # Get the true binary masks for the instances on the current image
+            if len(true_classes) < 1:                                                       # If no objects are in the image ...
+                y_true = np.zeros_like(a=img)                                               # ... the y_true is simply a black image 
+            else:                                                                           # If objects are present ...
+                y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data)  # ... create a mask image for the true masks
+            # plt.imshow(y_true)
+            # plt.show(block=False)
 
-        # The predicted image 
-        y_pred_dict = predictor.__call__(img)["instances"].get_fields()                     # y_pred_dict is a dict with keys ['pred_masks', 'pred_boxes', 'scores', 'pred_classes']
-        if "hungarian" in matching_type.lower():                                            # If we are matching objects using Hungarian algorithm ... 
-            y_pred = hungarian_matching(y_pred_dict=y_pred_dict, data=data,                 # ... compute the Hungarian matching ...
-                    predictor=predictor, matcher=matcher, FLAGS=FLAGS, meta_data=meta_data) # ... between ground truth and predictions
-        else: y_pred,_ = NMS_pred(y_pred_dict=y_pred_dict, data=data, conf_thresh=FLAGS.conf_threshold, # Else, the matching will be done ...
-                IoU_thresh=FLAGS.IoU_threshold, meta_data=meta_data)                        # ... using plain non max suppression 
-        
+            # The predicted image 
+            y_pred_dict = predictor.__call__(img)["instances"].get_fields()                 # y_pred_dict is a dict with keys ['pred_masks', 'pred_boxes', 'scores', 'pred_classes']
+            if "hungarian" in matching_type.lower():                                        # If we are matching objects using Hungarian algorithm ... 
+                y_pred = hungarian_matching(y_pred_dict=y_pred_dict, data=data,             # ... compute the Hungarian matching ...
+                        predictor=predictor, matcher=matcher, FLAGS=FLAGS, meta_data=meta_data) # ... between ground truth and predictions
+            else: y_pred,_ = NMS_pred(y_pred_dict=y_pred_dict, data=data, conf_thresh=FLAGS.conf_threshold, # Else, the matching will be done ...
+                    IoU_thresh=FLAGS.IoU_threshold, meta_data=meta_data)                    # ... using plain non max suppression 
+        if "Panoptic" in FLAGS.segmentation:
+            pan_seg_mask = np.asarray(Image.open(data["pan_seg_file_name"]))
+            unique_values = np.unique(pan_seg_mask).tolist()
+            true_classes = [np.min([len(meta_data.panoptic_classes), x]) for x in unique_values]
+            true_masks = list()
+            for unique_value in unique_values:
+                true_masks.append(pan_seg_mask[:,:,0] == unique_value)
+            y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data, segment_type="Panoptic")
+            y_pred = predictor.__call__(img)["panoptic_seg"]
+            if "vitrolife" in FLAGS.dataset_name.lower():
+                y_pred_img = id2rgb(y_pred[0].numpy())[:,:,0] 
+            else:
+                raise(NotImplementedError("Panoptic segmentation is only implemented on Vitrolife dataset at the moment"))
+            unique_values = np.unique(y_pred_img).tolist()
+            pred_masks = list()
+            for unique_value in unique_values:
+                pred_masks.append(y_pred_img == unique_value)
+            pred_lbls = np.add(unique_values, 1).tolist()
+            y_pred = draw_mask_image(mask_list=pred_masks, lbl_list=pred_lbls, meta_data=meta_data, segment_type="Panoptic")
+            # plt.imshow(y_pred, cmap="gray")
+            # plt.show(block=False)
+            
         # Append the input image, y_true and y_pred to the dictionary
         img_ytrue_ypred["input"].append(img)                                                # Append the input image to the dictionary
         img_ytrue_ypred["y_true"].append(y_true)                                            # Append the ground truth to the dictionary
@@ -218,6 +259,10 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
     return img_ytrue_ypred, data_batch, FLAGS, config
 
 
+# try:
+#     config = config
+# except:
+#     config = cfg 
 # position=[0.55, 0.08, 0.40, 0.75]
 # epoch_num = None
 # data_batches = None
@@ -225,7 +270,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
 # model_done_training = False 
 # data_split = "train"
 # device="cpu"
-# config = cfg
+# matching_type="NMS"
 
 # Define function to plot the images
 def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch_num=None, data_batches=None, model_done_training=False, device="cpu", matching_type="NMS"):
@@ -235,10 +280,16 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
         data_batches = [None, None, None]                                                   # ... it must be a list of None's...
     data_split_count = 1                                                                    # Initiate the datasplit counter
     fontdict = {'fontsize': 25}                                                             # Set the font size for the plot
-    thing_colors = list(reversed(deepcopy(MetadataCatalog.get(config.DATASETS.TRAIN[0]).thing_colors[:-1]))) # Create a list of the thing colors
-    thing_names = deepcopy(MetadataCatalog.get(config.DATASETS.TRAIN[0]).thing_classes)[:-1] + ["PN{}".format(x) for x in range(1,8)]   # Create a list of the class names used with numbered PNs
+    if len(FLAGS.segmentation) > 1:
+        raise(NotImplementedError("Only one type of segmentation at a time is allowed at the moment"))
+    if "Instance" in FLAGS.segmentation:
+        class_colors = list(reversed(deepcopy(MetadataCatalog.get(config.DATASETS.TRAIN[0]).thing_colors[:-1]))) # Create a list of the thing colors
+        class_names = deepcopy(MetadataCatalog.get(config.DATASETS.TRAIN[0]).thing_classes)[:-1] + ["PN{}".format(x) for x in range(1,8)]   # Create a list of the class names used with numbered PNs
+    if "Panoptic" in FLAGS.segmentation:
+        class_colors = list(reversed(deepcopy(MetadataCatalog.get(config.DATASETS.TRAIN[0]).panoptic_colors[:-1]))) # Create a list of the thing colors
+        class_names = deepcopy(MetadataCatalog.get(config.DATASETS.TRAIN[0]).panoptic_classes)[:-1] + ["PN{}".format(x) for x in range(1,8)]   # Create a list of the class names used with numbered PNs
     colors_with_alpha = list()                                                              # Initiate a list of colors with alpha values 
-    for thing_color in thing_colors:                                                        # Iterate over all colors in the thing_colors list
+    for thing_color in class_colors:                                                        # Iterate over all colors in the class_colors list
         t_col = tuple()                                                                     # Create a new tuple value 
         for col_val in thing_color:                                                         # For each color value item in the current tuple_color
             t_col += (np.divide(float(col_val),255),)                                       # Squeeze the value from [0, 255] to [0, 1] and append it to the earlier new tuple
@@ -250,16 +301,12 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
                 unit="Data_split", ascii=True, desc="Dataset split {:d}/{:d}".format(data_split_count, 3),
                 bar_format="{desc}  | {percentage:3.0f}% | {bar:35}| {n_fmt}/{total_fmt} [Spent: {elapsed}. Remaining: {remaining}{postfix}]"):      
         data_split_count += 1                                                               # Increase the datasplit counter for the progress bar 
-        if "vitrolife" not in FLAGS.dataset_name.lower() and data_split=="test": continue   # Only vitrolife has a test dataset. ADE20K doesn't. 
+        if "vitrolife" not in FLAGS.dataset_name.lower() and data_split=="test":            # Only vitrolife has a test dataset. ADE20K doesn't. 
+            continue
         # Extract information about the dataset used
         img_ytrue_ypred, data_batch, FLAGS, config = create_batch_img_ytrue_ypred(config=config, data_split=data_split, # Create the batch of images that needs to be visualized ...
             FLAGS=FLAGS, data_batch=data_batch, model_done_training=model_done_training, device=device, matching_type=matching_type) # ... and return the images in the data_batch dictionary
-        class_names = list(reversed(thing_names))
-        # max_PN_num = np.max(img_ytrue_ypred["PN"])
-        # max_PN_num = 0
-        # if max_PN_num > 0:
-        #     class_names = thing_names[:np.where(["PN{}".format(max_PN_num) in x for x in thing_names])[0][0]+1]
-        # else: class_names = thing_names[:np.where(["PN" in x for x in thing_names])[0][0]]  # Set class names if no PNs are present 
+        class_names = list(reversed(class_names))
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are working on the vitrolife dataset sort the ...
             data_batch = sorted(data_batch, key=lambda x: x["image_custom_info"]["PN_image"])   # ... data_batch after the number of PN per found image
             img_ytrue_ypred = sort_dictionary_by_PN(data=img_ytrue_ypred)                   # And then also sort the data dictionary

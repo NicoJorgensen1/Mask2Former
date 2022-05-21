@@ -224,14 +224,19 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     if all([FLAGS.debugging == False, "vitrolife" in FLAGS.dataset_name.lower(), hyperparameter_optimization==False]):  # Inference will only be performed when training the Vitrolife model
         config.DATASETS.TEST = ("vitrolife_dataset_test",)                                                  # The inference will be done on the test dataset
         eval_test_results,_,_,PN_pred_count,PN_true_count = evaluateResults(FLAGS, config, data_split="test")   # Evaluate the result metrics on the validation set with the best performing model
-        if len(FLAGS.segmentation) == 1:                                                                    # Only one type of segmentation at the time supported at the moment 
+        if len(FLAGS.segmentation) > 1:
+            raise(NotImplementedError("Only one type of segmentation at a time is allowed at the moment"))
+        if "Instance" in FLAGS.segmentation:
             eval_metrics = eval_test_results[FLAGS.segmentation[0]]["segm"]
+        if "Panoptic" in FLAGS.segmentation:
+            eval_metrics = eval_test_results[FLAGS.segmentation[0]]["panoptic_seg"]
         history_test = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=eval_metrics, data_split="test")
         for key in history_test.keys():                                                                     # Iterate over all the keys in the history dictionary
             if "test" in key: test_history[key] = history_test[key][-1]                                     # If "test" is in the key, assign the value to the test_dictionary 
         save_dictionary(dictObject=test_history, save_folder=config.OUTPUT_DIR, dictName="test_history")    # Save the test results in a dictionary 
-        for dict_key in ["precision", "scores", "recall"]:                                                  # Iterate over the three, long keys in the test dictionary ...
-            del test_history["test_" + dict_key]                                                            # ... and delete them all after having saved the dictionary to a local file 
+        if "Instance" in FLAGS.segmentation:
+            for dict_key in ["precision", "scores", "recall"]:                                              # Iterate over the three, long keys in the test dictionary ...
+                del test_history["test_" + dict_key]                                                        # ... and delete them all after having saved the dictionary to a local file 
 
     # Return the results
     if hyperparameter_optimization: return new_best

@@ -103,9 +103,17 @@ def updateLogsFunc(log_file, FLAGS, history, best_val, train_start, epoch_start,
     train_mode = "min" if "loss" in FLAGS.eval_metric else "max"
     epoch = cur_epoch+1
     string1, string2 = computeRemainingTime(epoch=epoch-1, num_epochs=FLAGS.num_epochs, train_start_time=train_start, epoch_start_time=epoch_start)
+
+    # Read the keys to use 
+    if len(FLAGS.segmentation) > 1:
+        raise(NotImplementedError("Only one type of segmentation at a time is allowed at the moment"))
+    if "Instance" in FLAGS.segmentation:
+        keywords = ["AP"]
+    if "Panoptic" in FLAGS.segmentation:
+        keywords = ["PQ", "RQ", "SQ"]
         
     # Read the latest evaluation results
-    metrics_train_keys = [x for x in history.keys() if "train" in x and any([y in x for y in ["AP"]])]
+    metrics_train_keys = [x for x in history.keys() if "train" in x and any([y in x for y in keywords])]
     metrics_train = {key: history[key][-1] for key in metrics_train_keys}
 
     # Update the logfile 
@@ -113,7 +121,7 @@ def updateLogsFunc(log_file, FLAGS, history, best_val, train_start, epoch_start,
         printAndLog(input_to_write=string1, logs=log_file, postfix="\n")
     printAndLog(input_to_write="Train metrics:".ljust(25), logs=log_file, prefix="", postfix="")
     printAndLog(input_to_write=metrics_train, logs=log_file, oneline=True, prefix="", postfix="\n", length=15)
-    metrics_val_keys = [x for x in history.keys() if "val" in x and any([y in x for y in ["AP"]])]
+    metrics_val_keys = [x for x in history.keys() if "val" in x and any([y in x for y in keywords])]
     metrics_val = {key: history[key][-1] for key in metrics_val_keys}
     printAndLog(input_to_write="Validation metrics:".ljust(25), logs=log_file, prefix="")
     printAndLog(input_to_write=metrics_val, logs=log_file, oneline=True, prefix="", postfix="\n", length=15)
