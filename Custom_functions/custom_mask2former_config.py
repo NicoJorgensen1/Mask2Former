@@ -40,7 +40,8 @@ def createVitrolifeConfiguration(FLAGS):
         swin_config = [x for x in os.listdir(os.path.join(config_folder, "swin")) if all([swin_type in x, x.endswith(".yaml")])][-1]    # Find the corresponding swin config
         cfg.merge_from_file(os.path.join(config_folder, "swin", swin_config))                       # Merge the configuration with the swin configuration
     else:                                                                                           # If we are not using the swin backbone ...
-        cfg.merge_from_file(os.path.join(config_folder, "maskformer2_R50_bs16_160k.yaml"))          # ... instead merge with the ResNet config 
+        resnet_config = [x for x in os.listdir(config_folder) if "R{}".format(FLAGS.resnet_depth) in x][-1]
+        cfg.merge_from_file(os.path.join(config_folder, resnet_config))                             # ... instead merge with the ResNet config 
     cfg.merge_from_file(os.path.join(config_folder, "Base-{}-{}Segmentation.yaml".format(config_dataset_type.upper(), segmentation_type.capitalize()))) # Merge with the base config for the dataset.
 
     if "vitrolife" in FLAGS.dataset_name.lower():                                                   # If we are working on the Vitrolife dataset ... 
