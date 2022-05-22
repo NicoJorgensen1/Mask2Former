@@ -15,41 +15,6 @@ from custom_evaluation_func import evaluateResults                              
 from custom_callback_functions import early_stopping, lr_scheduler, keepAllButLatestAndBestModel, updateLogsFunc    # Callback functions for model training
 
 
-
-
-# from custom_Trainer_class import custom_augmentation_mapper
-# from detectron2.data import MetadataCatalog, build_detection_train_loader
-# from detectron2.modeling import build_model
-# from mask2former.modeling.matcher import HungarianMatcher
-# from detectron2.structures import Boxes, ImageList, Instances, BitMasks
-# from mask2former.maskformer_model import MaskFormer
-# mapper = custom_augmentation_mapper(config=config, is_train="train" in config.DATASETS.TRAIN[0])
-# data_loader = build_detection_train_loader(cfg=config, mapper=mapper, num_workers=1)
-# data_loader_iter = iter(data_loader)
-# data = next(data_loader_iter)
-# model = build_model(cfg=config)
-# MaskFormer_model = MaskFormer(cfg=config)
-# img_torch = torch.reshape(data[0]["image"], (1,)+tuple(data[0]["image"].shape))
-# features = model.backbone(img_torch.to(model.device).to(torch.float))
-# outputs = model.sem_seg_head(features)
-# gt_instances = [x["instances"].to(MaskFormer_model.device) for x in data]
-# images = [x["image"].to(MaskFormer_model.device) for x in data]
-# images = [(x - MaskFormer_model.pixel_mean) / MaskFormer_model.pixel_std for x in images]
-# images = ImageList.from_tensors(images, MaskFormer_model.size_divisibility)
-# targets = MaskFormer_model.prepare_targets(gt_instances, images)
-# outputs_without_aux = {k: v for k, v in outputs.items() if k != "aux_outputs"}
-# matcher = HungarianMatcher(cost_class=FLAGS.class_loss_weight, cost_dice=FLAGS.dice_loss_weight,    # Create an instance of the ...
-#         cost_mask=FLAGS.mask_loss_weight, num_points=config.MODEL.MASK_FORMER.TRAIN_NUM_POINTS)     # ... Hungarian Matcher class
-# bs, num_queries = outputs_without_aux["pred_logits"].shape[:2]
-
-# # These are the ones failing 
-# indices = matcher(outputs_without_aux, targets)
-# losses = MaskFormer_model.criterion(outputs, targets)
-
-
-
-
-
 # Run the training function 
 def run_train_func(cfg):
     Trainer = My_GoTo_Trainer(cfg)
@@ -110,7 +75,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
         FLAGS.no_object_weight = trial.suggest_float(name="no_object_weight", low=1e-4, high=2)
         if "vitrolife" in FLAGS.dataset_name:
             FLAGS.num_queries = trial.suggest_int(name="num_queries", low=15, high=150) 
-        if FLAGS.use_transformer_backbone==False:
+        if FLAGS.use_transformer_backbone==False and "Instance" not in FLAGS.segmentation:
             FLAGS.resnet_depth = trial.suggest_categorical(name="resnet_depth", choices=[50, 101])
             FLAGS.backbone_freeze_layers = trial.suggest_int(name="backbone_freeze", low=0, high=5)
         del config 
@@ -129,7 +94,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
         FLAGS.no_object_weight = trial.params["no_object_weight"]
         if "vitrolife" in FLAGS.dataset_name:
             FLAGS.num_queries = trial.params["num_queries"]
-        if FLAGS.use_transformer_backbone==False:
+        if FLAGS.use_transformer_backbone==False and "Instance" not in FLAGS.segmentation:
             FLAGS.resnet_depth = trial.params["resnet_depth"]
             FLAGS.backbone_freeze_layers = trial.params["backbone_freeze"]
         del config 
