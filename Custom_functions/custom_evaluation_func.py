@@ -40,9 +40,9 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
             total_runs = int(np.ceil(np.divide(total_runs, 4)))                                                 # ... then only 1/4 of the dataset will be evaluated during HPO
 
     pred_out_dir = os.path.join(cfg.OUTPUT_DIR, "Predictions")                                                  # The path of where to store the resulting evaluation
-    sem_seg_out_dir = os.path.join(pred_out_dir, data_split, "Semantic_segmentation")
-    inst_seg_out_dir = os.path.join(pred_out_dir, data_split, "Instance_segmentation")
-    panop_seg_out_dir = os.path.join(pred_out_dir, data_split, "Panoptic_segmentation")
+    sem_seg_out_dir = os.path.join(pred_out_dir, data_split, "Semantic_segmentation")                           # The path to store semantic segmentation results 
+    inst_seg_out_dir = os.path.join(pred_out_dir, data_split, "Instance_segmentation")                          # The path to store instance segmentation results 
+    panop_seg_out_dir = os.path.join(pred_out_dir, data_split, "Panoptic_segmentation")                         # The path to store panoptic segmentation results 
     if "Semantic" in FLAGS.segmentation:                                                                        # Create the evaluation folder for semantic segmentation ...
         os.makedirs(sem_seg_out_dir, exist_ok=True)                                                             # ... if it doesn't already exist
     if "Instance" in FLAGS.segmentation:                                                                        # Create the evaluation folder for instance segmentation ...
@@ -57,12 +57,12 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
     if evaluators is None:                                                                                      # If there is no evaluators ...
         try: del meta_data.json_file                                                                            # ... then the json_file attribute of the MetadataCatalog is removed
         except: pass
-        evaluators = dict()
+        evaluators = dict()                                                                                     # Initiate a dictionary to store all the evaluators used
         if "Semantic" in FLAGS.segmentation:
             semantic_evaluator = deepcopy(SemSegEvaluator(dataset_name=dataset_name, output_dir=sem_seg_out_dir))   # Create an instance of the semantic segmentation evaluator 
             evaluators["Semantic"] = semantic_evaluator
         if "Instance" in FLAGS.segmentation:
-            instance_evaluator = deepcopy(InstanceSegEvaluator(dataset_name=dataset_name, output_dir=inst_seg_out_dir, allow_cached_coco=False))    # Build the evaluator for instance segmentation 
+            instance_evaluator = deepcopy(InstanceSegEvaluator(dataset_name=dataset_name, output_dir=inst_seg_out_dir, allow_cached_coco=False))
             evaluators["Instance"] = instance_evaluator
         if "Panoptic" in FLAGS.segmentation:
             panoptic_evalutator = deepcopy(Custom_Panoptic_Evaluator(dataset_name=dataset_name, output_dir=panop_seg_out_dir))
@@ -115,8 +115,8 @@ def evaluateResults(FLAGS, cfg, data_split="train", dataloader=None, evaluators=
 
             # Count PN's for instance segmentation
             if all(["Instance" in FLAGS.segmentation, "vitrolife" in dataset_name.lower(), "test" in data_split.lower()]):
-                y_pred = y_pred["instances"].get_fields()
-                PN_masks = NMS_pred(y_pred_dict=y_pred, data=data, meta_data=meta_data, conf_thresh=FLAGS.conf_threshold, IoU_thresh=FLAGS.IoU_threshold) 
+                out_pred = y_pred["instances"].get_fields()
+                PN_masks = NMS_pred(y_pred_dict=out_pred, data=data, meta_data=meta_data, conf_thresh=FLAGS.conf_threshold, IoU_thresh=FLAGS.IoU_threshold) 
                 PN_pred_count["Instance"].append(int(len(PN_masks)))
                 PN_true_count["Instance"].append(int(data["image_custom_info"]["PN_image"]))
             
