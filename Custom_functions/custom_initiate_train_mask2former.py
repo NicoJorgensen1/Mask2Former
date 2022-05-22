@@ -40,7 +40,7 @@ from custom_callback_functions import keepAllButLatestAndBestModel              
 
 
 # Get the FLAGS, the config and the logfile. 
-# torch.cuda.empty_cache()                                                                                # Empty the GPU cache 
+torch.cuda.empty_cache()                                                                                # Empty the GPU cache 
 FLAGS, cfg, trial, log_file = perform_HPO()                                                             # Perform HPO if that is chosen 
 write_config_to_file(config=cfg)                                                                        # Save the config file with the final parameters used in the output dir
 cfg, FLAGS = get_HPO_params(config=cfg, FLAGS=FLAGS, trial=trial, hpt_opt=False)                        # Update the config and the FLAGS with the best found parameters 
