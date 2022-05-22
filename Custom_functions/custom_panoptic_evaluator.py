@@ -1,5 +1,4 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
-import contextlib
 import io
 import copy 
 import itertools
@@ -17,8 +16,7 @@ from detectron2.utils.file_io import PathManager
 from detectron2.evaluation.panoptic_evaluation import COCOPanopticEvaluator
 import multiprocessing
 from detectron2.data import MetadataCatalog
-from panopticapi.evaluation import PQStat, PQStatCat
-from matplotlib import pyplot as plt 
+from panopticapi.evaluation import PQStat
 from panopticapi.utils import get_traceback, rgb2id, id2rgb
 from imantics import Image as imantics_Image
 from imantics import Mask as imantics_Mask

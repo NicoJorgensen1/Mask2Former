@@ -146,11 +146,12 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
         segment_key_type = "segm" 
     if "Panoptic" in FLAGS.segmentation:
         segment_key_type = "panoptic_seg"
-    metrics_train = metrics_train[FLAGS.segmentation[0]][segment_key_type]
+    if metrics_train is not None:
+        metrics_train = metrics_train[FLAGS.segmentation[0]][segment_key_type]
     metrics_eval = metrics_eval[FLAGS.segmentation[0]][segment_key_type]
-        
+    
     # Create history and list of relevant history keys
-    if FLAGS.inference_only==False or FLAGS.hp_optim==False:
+    if FLAGS.inference_only==False or FLAGS.hp_optim==False or metrics_train is not None:
         history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_train, data_split="train", history=history)
     history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_eval, data_split="val", history=history)
 

@@ -7,7 +7,6 @@ from copy import deepcopy
 import tqdm 
 from detectron2.engine.defaults import DefaultPredictor
 from detectron2.evaluation import SemSegEvaluator 
-from custom_print_and_log_func import printAndLog
 from mask2former import MaskFormerInstanceDatasetMapper
 from mask2former import InstanceSegEvaluator
 from detectron2.data import build_detection_test_loader

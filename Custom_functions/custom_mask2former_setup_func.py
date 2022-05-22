@@ -1,6 +1,5 @@
 # Import libraries
-import os
-from turtle import st                                                                               # Used to navigate the folder structure in the current os
+import os                                                                               # Used to navigate the folder structure in the current os
 import numpy as np                                                                      # Used for computing the iterations per epoch
 import argparse                                                                         # Used to parse input arguments through command line
 import pickle                                                                           # Used to save the history dictionary after training
@@ -115,8 +114,8 @@ parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of 
 parser.add_argument("--num_queries", type=int, default=75, help="The number of queries used for training. Default: 100")
 parser.add_argument("--batch_size", type=int, default=1, help="The batch size used for training the model. Default: 1")
 parser.add_argument("--num_images", type=int, default=6, help="The number of images to display/segment. Default: 6")
-parser.add_argument("--num_trials", type=int, default=550, help="The number of trials to run HPO for. Only relevant if '--hp_optim==True'. Default: 300")
-parser.add_argument("--num_random_trials", type=int, default=30, help="The number of random trials to run initiate the HPO for. Only relevant if '--hp_optim==True'. Default: 30")
+parser.add_argument("--num_trials", type=int, default=225, help="The number of trials to run HPO for. Only relevant if '--hp_optim==True'. Default: 300")
+parser.add_argument("--num_random_trials", type=int, default=20, help="The number of random trials to run initiate the HPO for. Only relevant if '--hp_optim==True'. Default: 30")
 parser.add_argument("--display_rate", type=int, default=5, help="The epoch_rate of how often to display image segmentations. A display_rate of 3 means that every third epoch, visual segmentations are saved. Default: 5")
 parser.add_argument("--gpus_used", type=int, default=1, help="The number of GPU's to use for training. Only applicable for training with ADE20K. This input argument deprecates the '--num-gpus' argument. Default: 1")
 parser.add_argument("--num_epochs", type=int, default=250, help="The number of epochs to train the model for. Default: 1")
@@ -172,7 +171,7 @@ cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                              
 if "nico" in cfg.OUTPUT_DIR.lower():
     FLAGS.num_trials = 2
     FLAGS.num_epochs = 2
-    FLAGS.hp_optim = False 
+    FLAGS.hp_optim = True 
 
 # Create the log file
 log_file = os.path.join(cfg.OUTPUT_DIR, "Training_logs.txt")                            # Initiate the log filename

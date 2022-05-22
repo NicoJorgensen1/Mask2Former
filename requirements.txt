@@ -11,3 +11,4 @@ opencv-python
 pandas
 sklearn 
 ninja 
+imantics 

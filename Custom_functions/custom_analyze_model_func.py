@@ -11,7 +11,6 @@ from fvcore.nn import flop_count_table  # can also try flop_count_str
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import CfgNode
 from detectron2.data import build_detection_test_loader
-from detectron2.engine import default_argument_parser
 from detectron2.modeling import build_model
 from detectron2.utils.analysis import (
     FlopCountAnalysis,
