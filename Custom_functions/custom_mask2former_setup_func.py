@@ -96,6 +96,8 @@ def changeFLAGS(FLAGS):
     FLAGS.HPO_best_metric = np.inf if "loss" in FLAGS.eval_metric.lower() else -np.inf  # Create variable to keep track of the best results obtained when performing HPO
     FLAGS.quit_training = False                                                         # The initial value for the "quit_training" parameter should be False
     FLAGS.ignore_label = 0 if FLAGS.ignore_background else 255                          # As default no labels will be ignored     
+    if "Instance" in FLAGS.segmentation and FLAGS.use_transformer_backbone == False:
+        FLAGS.resnet_depth = 50
     return FLAGS
 
 

@@ -32,6 +32,7 @@ def createVitrolifeConfiguration(FLAGS):
         segmentation_type = "panoptic"
         config_dataset_type = "coco"
     config_folder = os.path.join(Mask2Former_dir, "configs", config_dataset_type, segmentation_type+"-segmentation")   # Get the path of the ade20k configs 
+    assert os.path.isdir(config_folder), "This config_folder has to exist => config_folder = {}".format(config_folder)
     cfg = get_cfg()
     add_deeplab_config(cfg)
     add_maskformer2_config(cfg)
