@@ -283,10 +283,12 @@ def setup(args):
     add_maskformer2_config(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
-    segm_type = ""
-    if "sem_seg" in cfg.MODEL.WEIGHTS: segm_type = "semantic" 
-    if "inst_seg" in cfg.MODEL.WEIGHTS: segm_type = "instance" 
-    if "pan_seg" in cfg.MODEL.WEIGHTS: segm_type = "panoptic" 
+    if any(["semantic" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]) or any(["sem_seg" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]):
+        segm_type = "semantic" 
+    if any(["instance" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]) or any(["inst_seg" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]):
+        segm_type = "instance" 
+    if any(["panoptic" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]) or any(["pan_seg" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]):
+        segm_type = "panoptic" 
     if any(["ade20k" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]):
         dataset = "ade20k"
     if any(["coco" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]):
