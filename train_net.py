@@ -283,7 +283,10 @@ def setup(args):
     add_maskformer2_config(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
-    cfg.OUTPUT_DIR = cfg.OUTPUT_DIR+"ade20k_instance"
+    if "sem_seg" in cfg.MODEL.WEIGHTS: segm_type = "semantic" 
+    if "inst_seg" in cfg.MODEL.WEIGHTS: segm_type = "instance" 
+    if "pan_seg" in cfg.MODEL.WEIGHTS: segm_type = "panoptic" 
+    cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "_ade20k_" + segm_type
     cfg.freeze()
     default_setup(cfg, args)
     # Setup logger for "mask_former" module
