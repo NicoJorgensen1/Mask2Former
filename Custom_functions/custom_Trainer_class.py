@@ -39,7 +39,8 @@ def custom_augmentation_mapper(config, is_train=True, segmentation_type="instanc
             T.RandomCrop("relative", (0.75, 0.75)),                         # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomCrop
             T.Resize((500,500), Image.BILINEAR)]                            # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.Resize
     # if "instance" in segmentation_type.lower():
-    custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=True, augmentations=transform_list)    # Create the mapping from data dictionary to augmented training image
+    # custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=True, augmentations=transform_list)    # Create the mapping from data dictionary to augmented training image
+    custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=True, augmentations=[])    # Create the mapping from data dictionary to augmented training image
     # if "panoptic" in segmentation_type.lower():
     #     custom_mapper = COCOPanopticNewBaselineDatasetMapper(config, is_train=True, tfm_gens=transform_list)
     return custom_mapper
