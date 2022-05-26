@@ -286,7 +286,11 @@ def setup(args):
     if "sem_seg" in cfg.MODEL.WEIGHTS: segm_type = "semantic" 
     if "inst_seg" in cfg.MODEL.WEIGHTS: segm_type = "instance" 
     if "pan_seg" in cfg.MODEL.WEIGHTS: segm_type = "panoptic" 
-    cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "_ade20k_" + segm_type
+    if any(["ade20k" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]):
+        dataset = "ade20k"
+    if any(["coco" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]):
+        dataset = "coco"
+    cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "_" + dataset + "_" + segm_type
     cfg.freeze()
     default_setup(cfg, args)
     # Setup logger for "mask_former" module
