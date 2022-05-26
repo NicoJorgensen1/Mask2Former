@@ -292,6 +292,8 @@ def setup(args):
 
 def main(args):
     cfg = setup(args)
+    if os.path.isdir(cfg.OUTPUT_DIR):
+        cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "2"
 
     if args.eval_only:
         model = Trainer.build_model(cfg)
