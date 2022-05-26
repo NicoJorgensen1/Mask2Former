@@ -293,7 +293,14 @@ def setup(args):
         dataset = "ade20k"
     if any(["coco" in x.lower() for x in [args.config_file, cfg.MODEL.WEIGHTS]]):
         dataset = "coco"
-    cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "_" + dataset + "_" + segm_type
+    backbone_type = ""
+    if "swin" in cfg.MODEL.WEIGHTS:
+        backbone_type = "_swin"
+    if "R50" in cfg.MODEL.WEIGHTS or "R101" in cfg.MODEL.WEIGHTS:
+        backbone_type = "_resnet"
+    cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "_" + dataset + "_" + segm_type + backbone_type 
+    if os.path.isdir(cfg.OUTPUT_DIR):
+        cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "_2" 
     cfg.freeze()
     default_setup(cfg, args)
     # Setup logger for "mask_former" module
