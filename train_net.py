@@ -283,6 +283,7 @@ def setup(args):
     add_maskformer2_config(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+    cfg.OUTPUT_DIR = cfg.OUTPUT_DIR+"ade20k_instance"
     cfg.freeze()
     default_setup(cfg, args)
     # Setup logger for "mask_former" module
@@ -292,8 +293,6 @@ def setup(args):
 
 def main(args):
     cfg = setup(args)
-    if os.path.isdir(cfg.OUTPUT_DIR):
-        cfg.OUTPUT_DIR = cfg.OUTPUT_DIR + "2"
 
     if args.eval_only:
         model = Trainer.build_model(cfg)
