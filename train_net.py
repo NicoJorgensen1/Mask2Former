@@ -283,6 +283,7 @@ def setup(args):
     add_maskformer2_config(cfg)
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+    segm_type = ""
     if "sem_seg" in cfg.MODEL.WEIGHTS: segm_type = "semantic" 
     if "inst_seg" in cfg.MODEL.WEIGHTS: segm_type = "instance" 
     if "pan_seg" in cfg.MODEL.WEIGHTS: segm_type = "panoptic" 
