@@ -65,7 +65,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
             batch_size_max = int(np.ceil(np.min(FLAGS.available_mem_info)/2500))
         
         # Change the FLAGS parameters and then change the config
-        FLAGS.learning_rate = trial.suggest_float(name="learning_rate", low=1e-8, high=7e-5)
+        FLAGS.learning_rate = trial.suggest_float(name="learning_rate", low=1e-8, high=5e-5)
         FLAGS.batch_size = trial.suggest_int(name="batch_size", low=1, high=int(batch_size_max))
         FLAGS.optimizer_used = trial.suggest_categorical(name="optimizer_used", choices=["ADAMW", "SGD"])
         FLAGS.weight_decay = trial.suggest_float(name="weight_decay", low=1e-8, high=2e-2)
@@ -114,7 +114,6 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
 # Create function to train the objective function
 def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparameter_optimization=False):
     # Setup training variables before starting training
-    torch.cuda.empty_cache()                                                                                # Empty the GPU cache 
     objective_mode = "training"
     if FLAGS.inference_only: objective_mode = "inference"
     if hyperparameter_optimization: objective_mode = "hyperparameter optimization trial {:d}/{:d}".format(FLAGS.HPO_current_trial+1, FLAGS.num_trials)
@@ -142,20 +141,24 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
         try:
             epoch_start_time = time()                                                                       # Now this new epoch starts
             if FLAGS.inference_only==False:
-                config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=train_dataset, epoch=epoch, run_mode="train", hyperparameter_opt=hyperparameter_optimization)    # Launch the training loop for one epoch
+                config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=train_dataset,   # Launch the training ...
+                        epoch=epoch, run_mode="train", hyperparameter_opt=hyperparameter_optimization)              # ... loop for one epoch
                 if quit_training: break  
                 if not hyperparameter_optimization:
-                    eval_train_results, train_loader, train_evaluators,_,_ = evaluateResults(FLAGS, config, data_split="train", dataloader=train_loader, evaluators=train_evaluators, hp_optim=hyperparameter_optimization) # Evaluate the result on the training set
+                    eval_train_results, train_loader, train_evaluators,_,_ = evaluateResults(FLAGS, config, data_split="train", # Evaluate the results ...
+                            dataloader=train_loader, evaluators=train_evaluators, hp_optim=hyperparameter_optimization)         # ... on the training set
             
             # Validation period. Will 'train' with lr=0 on validation data, correct the metrics files and evaluate performance on validation data
-            config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=val_dataset, epoch=epoch, run_mode="val", hyperparameter_opt=hyperparameter_optimization)   # Launch the training loop for one epoch
-            if quit_training: break  
-            eval_val_results, val_loader, val_evaluators,_,_ = evaluateResults(FLAGS, config, data_split="val", dataloader=val_loader, evaluators=val_evaluators) # Evaluate the result metrics on the training set
+            config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=val_dataset, # Launch the training loop ...
+                            epoch=epoch, run_mode="val", hyperparameter_opt=hyperparameter_optimization)    # ... for one single epoch
+            if quit_training: break                                                                         # If the training must be quitted, break the for loop 
+            eval_val_results, val_loader, val_evaluators,_,_ = evaluateResults(FLAGS, config,               # Evaluate the result metrics ...
+                    data_split="val", dataloader=val_loader, evaluators=val_evaluators)                     # ... on the training set
             config.DATASETS.TRAIN = train_dataset                                                           # Set the training dataset back 
             
             # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results
-            history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results,    # Create and save the learning curves ...
-                        metrics_eval=eval_val_results, history=history)                             # ... including all training and validation metrics
+            history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results,            # Create and save the learning curves ...
+                        metrics_eval=eval_val_results, history=history)                                     # ... including all training and validation metrics
             save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
             [os.remove(os.path.join(config.OUTPUT_DIR, x)) for x in os.listdir(config.OUTPUT_DIR) if "events.out.tfevent" in x]
             
