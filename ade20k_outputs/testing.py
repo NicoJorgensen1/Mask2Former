@@ -1,0 +1,159 @@
+import os 
+import cv2 
+import numpy as np
+from PIL import Image 
+import matplotlib.pyplot as plt 
+import pickle
+
+def isgray(img):
+    if len(img.shape) < 3: return True
+    if img.shape[2]  == 1: return True
+    b,g,r = img[:,:,0], img[:,:,1], img[:,:,2]
+    if (b==g).all() and (b==r).all(): return True
+    return False
+
+def apply_colormap(mask_img, segmentation_type="panoptic"):
+    thing_colors = [(185,220,255), (255,185,220), (220,255,185), (185,255,0),                           # Set colors for the ...
+                (0,185,220), (220,0,185), (115,45,115), (45,115,45)]                                    # ... different numbers of PNs 
+    stuff_colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0), (185,220,255)]                        # Set random colors for when the images will be visualized
+    panoptic_colors = stuff_colors[:-1] + thing_colors                                                  # Set random colors for the panoptic classes 
+    unique_values = np.unique(mask_img)
+    final_mask = np.zeros(shape=(mask_img.shape[0], mask_img.shape[1], 3))
+    if "panoptic" in segmentation_type.lower(): colors_used = panoptic_colors
+    if "instance" in segmentation_type.lower(): colors_used = thing_colors
+    if "semantic" in segmentation_type.lower(): colors_used = stuff_colors
+    colors_used.insert(0, (0,0,0))                                                                      # All kind of segmentations will have their first unique value = 0, which should be black background 
+    for unique_value in unique_values:
+        col_idx = np.where(unique_value == unique_values)[0][0]
+        final_mask[mask_img==unique_value] = colors_used[col_idx]
+        if "instance" in segmentation_type.lower() and unique_value != 0:
+            bbox_coordinates = np.asarray(np.where((mask_img==unique_value).astype(bool)))              # Get all pixel coordinates for the white pixels in the mask
+            x1, y1 = np.amin(bbox_coordinates, axis=1)                                                  # Extract the minimum x and y white pixel values
+            x2, y2 = np.amax(bbox_coordinates, axis=1)                                                  # Extract the maximum x and y white pixel values
+            final_mask = cv2.rectangle(final_mask, (y1,x1), (y2,x2), colors_used[col_idx], 2)           # Overlay the bounding box for the current object on the current image 
+    return final_mask.astype(np.uint8)
+
+
+# Add the Mask2Former directory to PATH
+import os                                                                                               # Used to navigate the folder structure in the current os
+import sys                                                                                              # Used to control the PATH variable
+Mask2Former_dir = os.path.join("/mnt", "c", "Users", "Nico-", "Documents", "Python_Projects", "Mask2Former")                                                                # Home WSL
+if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("C:\\", Mask2Former_dir.split(os.path.sep, 1)[1])                                                     # Home windows computer
+if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("/mnt", "c", "Users", "wd974261", "Documents", "Python", "Mask2Former")                               # Work WSL
+if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("C:\\", Mask2Former_dir.split(os.path.sep, 1)[1])                                                     # Work windows computer
+if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("/home", "neal", "Panoptic_segmentation_using_deep_neural_networks", "Repositories", "Mask2Former")   # Larac server
+if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("/mnt", "home_shared", Mask2Former_dir.split(os.path.sep, 2)[2])                                      # Balder server
+assert os.path.isdir(Mask2Former_dir), "The Mask2Former directory doesn't exist in the chosen location"
+dataset_dir = os.path.join("/mnt", "c", "Users", "Nico-", "OneDrive - Aarhus Universitet", "Biomedicinsk Teknologi", "5. semester", "Speciale", "Datasets")                 # Home WSL
+if not os.path.isdir(dataset_dir): dataset_dir = os.path.join("C:\\", dataset_dir.split(os.path.sep,1)[1])                                                                  # Home windows computer
+if not os.path.isdir(dataset_dir): dataset_dir = os.path.join("/mnt", "c", "Users", "wd974261", "Documents", "Python", "Datasets")                                          # Work WSL
+if not os.path.isdir(dataset_dir): dataset_dir = os.path.join("C:\\", dataset_dir.split(os.path.sep,1)[1])                                                                  # Work windows computer
+if not os.path.isdir(dataset_dir): dataset_dir = os.path.join("/home", "neal", "Panoptic_segmentation_using_deep_neural_networks", "Datasets")                              # Larac server
+if not os.path.isdir(dataset_dir): dataset_dir = os.path.join("/mnt", "home_shared", dataset_dir.split(os.path.sep, 2)[2])                                                  # Balder server
+assert os.path.isdir(dataset_dir), "The dataset directory doesn't exist in the chosen location"
+
+
+testing_dir = os.path.join(Mask2Former_dir, "ade20k_outputs")
+Using_Vitrolife = True   
+img_string = "Vitrolife_" if Using_Vitrolife else ""
+
+
+if Using_Vitrolife:
+    Vitrolife_dataset_dir = os.path.join(dataset_dir, "Vitrolife_dataset")
+    used_im = "30a73399b12b9c964815e1f71b0f27554b1b9203492fc792640078522426b1fe_W02"
+    orig_im_path = [os.path.join(Vitrolife_dataset_dir, "raw_images", x) for x in os.listdir(os.path.join(Vitrolife_dataset_dir, "raw_images")) if used_im in x][0]
+    sem_im_path = [os.path.join(Vitrolife_dataset_dir, "annotations_semantic_masks", x) for x in os.listdir(os.path.join(Vitrolife_dataset_dir, "annotations_semantic_masks")) if used_im in x][0]
+    pan_im_path = [os.path.join(Vitrolife_dataset_dir, "annotations_panoptic_masks", x) for x in os.listdir(os.path.join(Vitrolife_dataset_dir, "annotations_panoptic_masks")) if used_im in x][0]
+    inst_im_path = [os.path.join(Vitrolife_dataset_dir, "annotations_instance_dicts", x) for x in os.listdir(os.path.join(Vitrolife_dataset_dir, "annotations_instance_dicts")) if used_im in x][0]
+else:
+    orig_im_path = os.path.join(testing_dir, "jena_0026.png")
+    inst_im_path = os.path.join(testing_dir, "jena_inst_seg_out.jpg")
+    sem_im_path = os.path.join(testing_dir, "jena_sem_seg_out.jpg")
+    pan_im_path = os.path.join(testing_dir, "jena_pan_seg_out.jpg")
+
+orig_im = np.asarray(Image.open(orig_im_path))
+sem_im =  np.asarray(Image.open(sem_im_path))
+pan_im =  np.asarray(Image.open(pan_im_path))
+if Using_Vitrolife:
+    with open(inst_im_path, "rb") as fb:
+        inst_dict = pickle.load(fb)
+    inst_im = np.zeros_like(inst_dict[list(inst_dict.keys())[0]]).astype(np.uint8)
+    PN_count = 1
+    for kk, class_key in enumerate(inst_dict.keys()):
+        if "PN" in class_key.upper():
+            inst_im[inst_dict[class_key]] = PN_count
+            PN_count += 1
+    pan_im = pan_im[:,:,0]
+else:
+    inst_im = np.asarray(Image.open(inst_im_path))
+
+
+if isgray(inst_im):
+    inst_im = apply_colormap(mask_img=inst_im, segmentation_type="instance")
+if isgray(sem_im):
+    sem_im = apply_colormap(mask_img=sem_im, segmentation_type="semantic")
+if isgray(pan_im):
+    pan_im = apply_colormap(mask_img=pan_im, segmentation_type="panoptic")
+
+
+border_size = 25 if Using_Vitrolife else 50
+border_color = (0, 255, 3)
+
+border_vertical = np.multiply(np.ones((orig_im.shape[0], border_size, 3)).astype(np.uint8), border_color).astype(np.uint8)
+border_flat = np.multiply(np.ones((border_size, orig_im.shape[1], 3)).astype(np.uint8), border_color).astype(np.uint8)
+
+orig_and_inst = cv2.hconcat(src=[orig_im,border_vertical,inst_im])
+orig_and_sem  = cv2.hconcat(src=[orig_im,border_vertical,sem_im])
+orig_and_pan =  cv2.hconcat(src=[orig_im,border_vertical,pan_im])
+
+border_horizontal = np.multiply(np.ones((border_size, orig_and_pan.shape[1], 3)).astype(np.uint8), border_color).astype(np.uint8)
+
+inst_and_pan_sideways = cv2.hconcat(src=[inst_im,border_vertical,pan_im])
+inst_and_pan_ontop = cv2.vconcat(src=[inst_im,border_flat,pan_im])
+sem_and_pan_sideways = cv2.hconcat(src=[sem_im,border_vertical,pan_im])
+
+
+orig_inst_sem_pan = cv2.vconcat(src=[orig_and_inst, border_horizontal, sem_and_pan_sideways])
+
+
+
+
+plt.imshow(orig_inst_sem_pan)
+plt.axis("off")
+plt.show(block=False)
+
+Image.fromarray(orig_and_inst).save(fp=os.path.join(testing_dir, img_string+"Original_and_instance_segmentation.jpg"))
+Image.fromarray(orig_and_sem).save(fp=os.path.join(testing_dir, img_string+"Original_and_semantic_segmentation.jpg"))
+Image.fromarray(orig_and_pan).save(fp=os.path.join(testing_dir, img_string+"Original_and_panoptic_segmentation.jpg"))
+Image.fromarray(sem_and_pan_sideways).save(fp=os.path.join(testing_dir, img_string+"Semantic_and_panoptic_segmentation_sideways.jpg"))
+Image.fromarray(inst_and_pan_sideways).save(fp=os.path.join(testing_dir, img_string+"Instance_and_panoptic_segmentation_sideways.jpg"))
+Image.fromarray(inst_and_pan_ontop).save(fp=os.path.join(testing_dir, img_string+"Instance_and_panoptic_segmentation_ontop.jpg"))
+Image.fromarray(orig_inst_sem_pan).save(fp=os.path.join(testing_dir, img_string+"Original_instance_semantic_panoptic.jpg"))
+
+
+alpha_val = 0.5
+title_font = 27
+fig=plt.figure(figsize=(15,15))
+plt.subplot(2,2,1)
+plt.imshow(orig_im)
+plt.axis("off")
+plt.title("Input image", fontsize=title_font)
+plt.subplot(2,2,2)
+plt.imshow(orig_im)
+plt.imshow(sem_im, alpha=alpha_val)
+plt.axis("off")
+plt.title("Semantic segmentation overlaid", fontsize=title_font)
+plt.subplot(2,2,3)
+plt.imshow(orig_im)
+plt.imshow(inst_im, alpha=alpha_val)
+plt.axis("off")
+plt.title("Instance segmentation overlaid", fontsize=title_font)
+plt.subplot(2,2,4)
+plt.imshow(orig_im)
+plt.imshow(pan_im, alpha=alpha_val)
+plt.axis("off")
+plt.title("Panoptic segmentation overlaid", fontsize=title_font)
+plt.tight_layout()
+plt.show(block=False)
+fig.savefig(os.path.join(testing_dir, img_string+"orig_sem_inst_pan_overlaid.jpg"), bbox_inches="tight")
+

@@ -84,10 +84,10 @@ def sort_dictionary_by_PN(data):
 
 # Function to create an image from a list of masks and labels
 def draw_mask_image(mask_list, lbl_list, meta_data, segment_type="Instance"):
-    if segment_type.lower() == "instance":
+    if "instance" in segment_type.lower():
         class_colors = deepcopy(meta_data.thing_colors)                                     # Get the colors that the classes must be visualized with 
         class_names = deepcopy(meta_data.thing_classes)                                     # Read the class names present in the dataset
-    if segment_type.lower() == "panoptic":
+    if "panoptic" in segment_type.lower():
         class_colors = deepcopy(meta_data.panoptic_colors)
         class_names = deepcopy(meta_data.panoptic_classes) 
         lbl_list = deepcopy(np.subtract(lbl_list, 1))
@@ -102,13 +102,14 @@ def draw_mask_image(mask_list, lbl_list, meta_data, segment_type="Instance"):
         col = class_colors[col_idx]                                                         # Extract the thing color needed for the current object
         if len(np.where(mask)[0]) < 4:                                                      # If less than four points are positive in the current mask ...
             continue                                                                        # ... skip this mask, as we then can't draw a bounding box
-        if class_name == "PN":                                                              # If the current object is a PN ...
+        if "PN" in class_name.upper():                                                      # If the current object is a PN ...
             PN_count += 1                                                                   # ... increase the PN counter
         final_im[mask.astype(bool)] = col                                                   # Assign all pixels from the current object with the specified pixel color value 
-        bbox_coordinates = np.asarray(np.where(mask))                                       # Get all pixel coordinates for the white pixels in the mask
-        x1, y1 = np.amin(bbox_coordinates, axis=1)                                          # Extract the minimum x and y white pixel values
-        x2, y2 = np.amax(bbox_coordinates, axis=1)                                          # Extract the maximum x and y white pixel values
-        final_im = cv2.rectangle(final_im, (y1,x1), (y2,x2),col, 2)                         # Overlay the bounding box for the current object on the current image 
+        if "instance" in segment_type.lower():
+            bbox_coordinates = np.asarray(np.where(mask))                                   # Get all pixel coordinates for the white pixels in the mask
+            x1, y1 = np.amin(bbox_coordinates, axis=1)                                      # Extract the minimum x and y white pixel values
+            x2, y2 = np.amax(bbox_coordinates, axis=1)                                      # Extract the maximum x and y white pixel values
+            final_im = cv2.rectangle(final_im, (y1,x1), (y2,x2), col, 2)                    # Overlay the bounding box for the current object on the current image 
     # plt.imshow(final_im)
     # plt.show(block=False)
     return final_im                                                                         # Return the final image 
@@ -132,7 +133,7 @@ def hungarian_matching(y_pred_dict, data, predictor, matcher, FLAGS, meta_data):
         assert pred_masks.shape[0] == FLAGS.num_queries == outputs["pred_masks"].shape[1], "This fucking has to work"
         y_pred_masks = [x for x in pred_masks[row_pred_indices].numpy().astype(bool)]       # This is the matced predicted masks
         y_pred_lbls = np.asarray(true_classes)[col_pred_indices].tolist()                   # This is the matched predicted class labels for each of the predicted masks
-        y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the true masks
+        y_pred = draw_mask_image(mask_list=y_pred_masks, lbl_list=y_pred_lbls, meta_data=meta_data) # Create a mask image for the predicted masks
     return y_pred
 
 
@@ -224,7 +225,7 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             y_pred_dict = predictor.__call__(img)["instances"].get_fields()                 # y_pred_dict is a dict with keys ['pred_masks', 'pred_boxes', 'scores', 'pred_classes']
             if "hungarian" in matching_type.lower():                                        # If we are matching objects using Hungarian algorithm ... 
                 y_pred = hungarian_matching(y_pred_dict=y_pred_dict, data=data,             # ... compute the Hungarian matching ...
-                        predictor=predictor, matcher=matcher, FLAGS=FLAGS, meta_data=meta_data) # ... between ground truth and predictions
+                    predictor=predictor, matcher=matcher, FLAGS=FLAGS, meta_data=meta_data) # ... between ground truth and predictions
             else: y_pred,_ = NMS_pred(y_pred_dict=y_pred_dict, data=data, conf_thresh=FLAGS.conf_threshold, # Else, the matching will be done ...
                     IoU_thresh=FLAGS.IoU_threshold, meta_data=meta_data)                    # ... using plain non max suppression 
         if "Panoptic" in FLAGS.segmentation:

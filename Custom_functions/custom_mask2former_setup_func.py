@@ -171,7 +171,7 @@ cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                              
 if "nico" in cfg.OUTPUT_DIR.lower():
     FLAGS.num_trials = 2
     FLAGS.num_epochs = 2
-    FLAGS.hp_optim = True   
+    FLAGS.hp_optim = False   
 
 # Create the log file
 log_file = os.path.join(cfg.OUTPUT_DIR, "Training_logs.txt")                            # Initiate the log filename
