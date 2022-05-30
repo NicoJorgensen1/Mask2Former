@@ -20,7 +20,7 @@ if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("/mnt", "h
 assert os.path.isdir(Mask2Former_dir), "The Mask2Former directory doesn't exist in the chosen location"
 
 
-for segmentation_type in ["panoptic"]:#["semantic", "instance", "panoptic"]:
+for segmentation_type in ["semantic", "instance", "panoptic"]:
     ade20k_logfile_list = [os.path.join(Mask2Former_dir, "ade20k_outputs", x) for x in os.listdir(os.path.join(Mask2Former_dir,  "ade20k_outputs")) if "ade20k_{}_logfile".format(segmentation_type) in x]
     if len(ade20k_logfile_list) != 1:
         print("For the {} segmentation {} logfiles were found!".format(segmentation_type, len(ade20k_logfile_list)))
@@ -34,7 +34,7 @@ for segmentation_type in ["panoptic"]:#["semantic", "instance", "panoptic"]:
     history = {key: list() for key in hist_keys}
     ade20k_inst_log = list()
     for line_numb, line in enumerate(ade20k_logfile):
-        if "loss" in line:
+        if "loss" in line and "INFO" in line and "eta" in line:
             res = line.strip().split(" ")
             for kk, item in enumerate(res):
                 if any([x in item.strip() for x in hist_keys]) and not item.strip()[-2].isdigit():

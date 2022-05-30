@@ -69,6 +69,7 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     cfg.MODEL.MASK_FORMER.NUM_OBJECT_QUERIES = FLAGS.num_queries                                    # The number of queries to detect from the Transformer module 
     cfg.MODEL.MASK_FORMER.SIZE_DIVISIBILITY = 10                                                    # The size of the images will be padded to be in an equal division of 10 
     cfg.MODEL.MASK_FORMER.TEST.SEM_SEG_POSTPROCESSING_BEFORE_INFERENCE = True                       # Always make semantic segmentation predictions on downsampled data, and then resize afterwards 
+    cfg.MODEL.MASK_FORMER.DROPOUT = FLAGS.dropout
     cfg.MODEL.PANOPTIC_FPN.COMBINE.ENABLED = False                                                  # Always disable the panoptic FPN head 
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512                                                  # The ROI head proposals per image 
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.50                                                    # Assign the IoU threshold used for the model

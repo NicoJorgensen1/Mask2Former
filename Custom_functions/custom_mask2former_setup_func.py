@@ -123,6 +123,7 @@ parser.add_argument("--warm_up_epochs", type=int, default=5, help="The number of
 parser.add_argument("--patience", type=int, default=4, help="The number of epochs to accept that the model hasn't improved before lowering the learning rate by a factor '--lr_gamma'. Default: 4")
 parser.add_argument("--early_stop_patience", type=int, default=12, help="The number of epochs to accept that the model hasn't improved before terminating training. Default: 12")
 parser.add_argument("--backbone_freeze_layers", type=int, default=0, help="The number of layers in the backbone to freeze when training. Available [0,1,2,3,4,5]. Default: 0")
+parser.add_argument("--dropout", type=float, default=0.10, help="The dropout rate used for the linear layers. Default: 0.10")
 parser.add_argument("--dice_loss_weight", type=float, default=10, help="The weighting for the dice loss in the loss function. Default: 10")
 parser.add_argument("--mask_loss_weight", type=float, default=10, help="The weighting for the mask loss in the loss function. Default: 10")
 parser.add_argument("--class_loss_weight", type=float, default=3, help="The weighting for the classification loss in the loss function. Default: 3")
@@ -163,7 +164,7 @@ if "ade20k" in FLAGS.dataset_name.lower():
     FLAGS.num_classes = len(MetadataCatalog[cfg.DATASETS.TRAIN[0]].thing_classes)       # Get the number of classes in the current dataset
 FLAGS.available_mem_info = available_mem_info.tolist()                                  # Save the information of available GPU memory in the FLAGS variable
 FLAGS.conf_threshold = 0.50                                                             # The minimum confidence score a prediction needs in order to be treated as a "positive" prediction
-FLAGS.IoU_threshold = 0.30                                                              # The maximum overlap between two prediction masks before assuming they are different objects 
+FLAGS.IoU_threshold = 0.40                                                              # The maximum overlap between two prediction masks before assuming they are different objects 
 FLAGS.PN_mean_pixel_area = 1363                                                         # Set the mean pixel area of a PN 
 cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                                      # Set the final values for the config
 

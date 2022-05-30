@@ -238,7 +238,10 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data, segment_type="Panoptic")
             y_pred = predictor.__call__(img)["panoptic_seg"]
             if "vitrolife" in FLAGS.dataset_name.lower():
-                y_pred_img = id2rgb(y_pred[0].numpy())[:,:,0] 
+                y_pred_img = id2rgb(y_pred[0].numpy())
+                printAndLog(input_to_write="The unique colors of the predicted image is: {}".format(np.unique(y_pred_img.reshape(-1,3),axis=0)), logs=FLAGS.log_file)
+                assert np.array_equal(y_pred_img[:,:,0], y_pred_img[:,:,1]) and np.array_equal(y_pred_img[:,:,0], y_pred_img[:,:,2])
+                y_pred_img = y_pred_img[:,:,0]
             else:
                 raise(NotImplementedError("Panoptic segmentation is only implemented on Vitrolife dataset at the moment"))
             unique_values = np.unique(y_pred_img).tolist()

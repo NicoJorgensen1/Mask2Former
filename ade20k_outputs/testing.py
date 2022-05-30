@@ -1,6 +1,7 @@
 import os 
 import cv2 
 import numpy as np
+import copy 
 from PIL import Image 
 import matplotlib.pyplot as plt 
 import pickle
@@ -12,17 +13,21 @@ def isgray(img):
     if (b==g).all() and (b==r).all(): return True
     return False
 
-def apply_colormap(mask_img, segmentation_type="panoptic"):
-    thing_colors = [(185,220,255), (255,185,220), (220,255,185), (185,255,0),                           # Set colors for the ...
-                (0,185,220), (220,0,185), (115,45,115), (45,115,45)]                                    # ... different numbers of PNs 
-    stuff_colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0), (185,220,255)]                        # Set random colors for when the images will be visualized
-    panoptic_colors = stuff_colors[:-1] + thing_colors                                                  # Set random colors for the panoptic classes 
+def apply_colormap(mask_img, segmentation_type="panoptic", use_vitrolife=True, colors_used=None):
+    if colors_used is None and use_vitrolife:
+        thing_colors = [(185,220,255), (255,185,220), (220,255,185), (185,255,0),                       # Set colors for the ...
+                    (0,185,220), (220,0,185), (115,45,115), (45,115,45)]                                # ... different numbers of PNs 
+        stuff_colors = [(255,0,0), (0,255,0), (0,0,255), (255,255,0), (185,220,255)]                    # Set random colors for when the images will be visualized
+        panoptic_colors = stuff_colors[:-1] + thing_colors                                              # Set random colors for the panoptic classes 
+        
     unique_values = np.unique(mask_img)
     final_mask = np.zeros(shape=(mask_img.shape[0], mask_img.shape[1], 3))
-    if "panoptic" in segmentation_type.lower(): colors_used = panoptic_colors
-    if "instance" in segmentation_type.lower(): colors_used = thing_colors
-    if "semantic" in segmentation_type.lower(): colors_used = stuff_colors
-    colors_used.insert(0, (0,0,0))                                                                      # All kind of segmentations will have their first unique value = 0, which should be black background 
+    if use_vitrolife:
+        if "panoptic" in segmentation_type.lower(): colors_used = panoptic_colors
+        if "instance" in segmentation_type.lower(): colors_used = thing_colors
+        if "semantic" in segmentation_type.lower(): colors_used = stuff_colors
+    if use_vitrolife:
+        colors_used.insert(0, (0,0,0))                                                                  # All kind of segmentations will have their first unique value = 0, which should be black background 
     for unique_value in unique_values:
         col_idx = np.where(unique_value == unique_values)[0][0]
         final_mask[mask_img==unique_value] = colors_used[col_idx]
@@ -30,7 +35,7 @@ def apply_colormap(mask_img, segmentation_type="panoptic"):
             bbox_coordinates = np.asarray(np.where((mask_img==unique_value).astype(bool)))              # Get all pixel coordinates for the white pixels in the mask
             x1, y1 = np.amin(bbox_coordinates, axis=1)                                                  # Extract the minimum x and y white pixel values
             x2, y2 = np.amax(bbox_coordinates, axis=1)                                                  # Extract the maximum x and y white pixel values
-            final_mask = cv2.rectangle(final_mask, (y1,x1), (y2,x2), colors_used[col_idx], 2)           # Overlay the bounding box for the current object on the current image 
+            # final_mask = cv2.rectangle(final_mask, (y1,x1), (y2,x2), colors_used[col_idx], 2)           # Overlay the bounding box for the current object on the current image 
     return final_mask.astype(np.uint8)
 
 
@@ -54,7 +59,7 @@ assert os.path.isdir(dataset_dir), "The dataset directory doesn't exist in the c
 
 
 testing_dir = os.path.join(Mask2Former_dir, "ade20k_outputs")
-Using_Vitrolife = True   
+Using_Vitrolife = False   
 img_string = "Vitrolife_" if Using_Vitrolife else ""
 
 
@@ -67,9 +72,9 @@ if Using_Vitrolife:
     inst_im_path = [os.path.join(Vitrolife_dataset_dir, "annotations_instance_dicts", x) for x in os.listdir(os.path.join(Vitrolife_dataset_dir, "annotations_instance_dicts")) if used_im in x][0]
 else:
     orig_im_path = os.path.join(testing_dir, "jena_0026.png")
-    inst_im_path = os.path.join(testing_dir, "jena_inst_seg_out.jpg")
-    sem_im_path = os.path.join(testing_dir, "jena_sem_seg_out.jpg")
-    pan_im_path = os.path.join(testing_dir, "jena_pan_seg_out.jpg")
+    inst_im_path = os.path.join(testing_dir, "jena_0026_inst_seg_gt.png")
+    sem_im_path = os.path.join(testing_dir, "jena_0026_sem_seg_gt.png")
+    pan_im_path = os.path.join(testing_dir, "jena_0026_pan_seg_gt.png")
 
 orig_im = np.asarray(Image.open(orig_im_path))
 sem_im =  np.asarray(Image.open(sem_im_path))
@@ -85,15 +90,75 @@ if Using_Vitrolife:
             PN_count += 1
     pan_im = pan_im[:,:,0]
 else:
-    inst_im = np.asarray(Image.open(inst_im_path))
+    inst_img = np.asarray(Image.open(inst_im_path))
+    inst_im = np.zeros_like(inst_img).astype(np.uint8)
+    color_count = 1
+    for unique_value in np.unique(inst_img).tolist():
+        if unique_value > 25:
+            inst_im[inst_img==unique_value] = color_count
+            color_count += 1
+    if sem_im.shape[-1] > 3:
+        sem_im = sem_im[:,:,:3]
+    unique_colors_sem_im = np.unique(sem_im.reshape(-1,3), axis=0)
+    sem_img = np.zeros(shape=(sem_im.shape[0], sem_im.shape[1]), dtype=np.uint8)
+    for kk, unique_color in enumerate(unique_colors_sem_im):
+        sem_img[np.all(sem_im==unique_color, axis=-1)] = kk
+    sem_im = copy.deepcopy(sem_img)
+
+thing_colors, stuff_colors = list(), list()
+while True:
+    new_col = tuple(np.random.randint(low=0, high=255, size=(1,3), dtype=int).squeeze())
+    if new_col not in stuff_colors:
+        stuff_colors.append(new_col)
+    if len(stuff_colors) == len(np.unique(sem_im).tolist()):
+        break 
+while True:
+    new_col = tuple(np.random.randint(low=0, high=255, size=(1,3), dtype=int).squeeze())
+    if new_col not in stuff_colors and new_col not in thing_colors:
+        thing_colors.append(new_col)
+    if len(thing_colors) == len(np.unique(inst_im).tolist()):
+        break 
 
 
+
+stuff_col_numb, thing_col_numb = int(0), int(0)
+panop_colors = list()
+del pan_im
+# pan_im = sem_im + inst_im * 1000000
+# pan_img = np.zeros(shape=(orig_im.shape[0], orig_im.shape[1], 3)).astype(np.uint8)
+# unique_values = np.unique(pan_im).tolist()
+# for kk,unique_value in sorted(enumerate(unique_values)):
+#     if unique_value == 0:
+#         pan_img[pan_im==unique_value] = 0
+#     elif 1 <= unique_value < 5000:
+#         stuff_col_numb += 1
+#         pan_img[pan_im==unique_value] = stuff_colors[stuff_col_numb]
+#     elif unique_value >= 5000:
+#         pan_img[pan_im==unique_value] = thing_colors[thing_col_numb]
+#         thing_col_numb += 1
+# pan_im = copy.deepcopy(pan_img)
+
+stuff_colors.insert(0, (0,0,0))
+thing_colors.insert(0, (0,0,0))
 if isgray(inst_im):
-    inst_im = apply_colormap(mask_img=inst_im, segmentation_type="instance")
+    inst_im = apply_colormap(mask_img=inst_im, segmentation_type="instance", use_vitrolife=Using_Vitrolife, colors_used=None if Using_Vitrolife else thing_colors)
 if isgray(sem_im):
-    sem_im = apply_colormap(mask_img=sem_im, segmentation_type="semantic")
-if isgray(pan_im):
-    pan_im = apply_colormap(mask_img=pan_im, segmentation_type="panoptic")
+    sem_im = apply_colormap(mask_img=sem_im, segmentation_type="semantic", use_vitrolife=Using_Vitrolife, colors_used=None if Using_Vitrolife else stuff_colors)
+if Using_Vitrolife:
+    if isgray(pan_im):
+        pan_im = apply_colormap(mask_img=pan_im, segmentation_type="panoptic", use_vitrolife=Using_Vitrolife, colors_used=None if Using_Vitrolife else panop_colors)
+
+
+pan_im = copy.deepcopy(sem_im)
+unique_values = np.unique(inst_im.reshape(-1,3),axis=0)
+for kk, unique_value in enumerate(unique_values):
+    if np.sum(unique_value) == 0:
+        continue 
+    idx = inst_im==unique_value
+    new_col = tuple(unique_value.squeeze())
+    pan_im = np.multiply(pan_im, ~idx)
+    pan_im = np.add(pan_im, np.multiply(idx, inst_im))
+
 
 
 border_size = 25 if Using_Vitrolife else 50
@@ -133,26 +198,30 @@ Image.fromarray(orig_inst_sem_pan).save(fp=os.path.join(testing_dir, img_string+
 
 alpha_val = 0.5
 title_font = 27
-fig=plt.figure(figsize=(15,15))
+overlaid_title_string = " overlaid" if Using_Vitrolife else ""
+fig=plt.figure(figsize=(15,15) if Using_Vitrolife else (15,9))
 plt.subplot(2,2,1)
 plt.imshow(orig_im)
 plt.axis("off")
 plt.title("Input image", fontsize=title_font)
 plt.subplot(2,2,2)
-plt.imshow(orig_im)
-plt.imshow(sem_im, alpha=alpha_val)
+plt.imshow(orig_im if Using_Vitrolife else sem_im)
+if Using_Vitrolife:
+    plt.imshow(sem_im, alpha=alpha_val)
 plt.axis("off")
-plt.title("Semantic segmentation overlaid", fontsize=title_font)
+plt.title("Semantic segmentation"+overlaid_title_string, fontsize=title_font)
 plt.subplot(2,2,3)
-plt.imshow(orig_im)
-plt.imshow(inst_im, alpha=alpha_val)
+plt.imshow(orig_im if Using_Vitrolife else inst_im)
+if Using_Vitrolife:
+    plt.imshow(inst_im, alpha=alpha_val)
 plt.axis("off")
-plt.title("Instance segmentation overlaid", fontsize=title_font)
+plt.title("Instance segmentation"+overlaid_title_string, fontsize=title_font)
 plt.subplot(2,2,4)
-plt.imshow(orig_im)
-plt.imshow(pan_im, alpha=alpha_val)
+plt.imshow(orig_im if Using_Vitrolife else pan_im)
+if Using_Vitrolife:
+    plt.imshow(pan_im, alpha=alpha_val)
 plt.axis("off")
-plt.title("Panoptic segmentation overlaid", fontsize=title_font)
+plt.title("Panoptic segmentation"+overlaid_title_string, fontsize=title_font)
 plt.tight_layout()
 plt.show(block=False)
 fig.savefig(os.path.join(testing_dir, img_string+"orig_sem_inst_pan_overlaid.jpg"), bbox_inches="tight")

@@ -45,6 +45,7 @@ class PQStat_own(PQStat):
         pq, sq, rq, n = 0, 0, 0, 0
         per_class_results = {}
         for label, label_info in categories.items():
+            label = int(label)
             if isthing is not None:
                 cat_isthing = int(label_info['isthing']) == 1
                 if isthing != cat_isthing:
@@ -90,7 +91,7 @@ def pq_compute_single_core_own(proc_id, annotation_set, gt_folder, pred_folder, 
             pan_pred = np.stack((pan_pred,)*3, axis=-1)
         pan_pred = rgb2id(pan_pred)
 
-        gt_segms = {el['id']: el for el in gt_ann['segments_info']}
+        gt_segms = {float(el['id']): el for el in gt_ann['segments_info']}
         pred_segms = {el['id']: el for el in pred_ann['segments_info']}
         
         # predicted segments area calculation + prediction sanity checks
@@ -122,20 +123,20 @@ def pq_compute_single_core_own(proc_id, annotation_set, gt_folder, pred_folder, 
         pred_matched = set()
         for label_tuple, intersection in gt_pred_map.items():
             gt_label, pred_label = label_tuple
-            if gt_label not in gt_segms:
+            if gt_label not in [float(x) for x in list(gt_segms.keys())]:
                 continue
             if pred_label not in pred_segms:
                 continue
             if gt_segms[gt_label]['iscrowd'] == 1:
                 continue
-            if gt_segms[gt_label]['category_id'] != pred_segms[pred_label]['category_id']:
+            if int(gt_segms[gt_label]['category_id']) != int(pred_segms[pred_label]['category_id']):
                 continue
-
-            union = pred_segms[pred_label]['area'] + gt_segms[gt_label]['area'] - intersection - gt_pred_map.get((VOID, pred_label), 0)
+            
+            union = pred_segms[pred_label]['area'] + int(gt_segms[gt_label]['area']) - intersection - gt_pred_map.get((VOID, pred_label), 0)
             iou = intersection / union
-            if iou > 0.5:
-                pq_stat[gt_segms[gt_label]['category_id']].tp += 1
-                pq_stat[gt_segms[gt_label]['category_id']].iou += iou
+            if iou > 0.50:
+                pq_stat[int(gt_segms[gt_label]['category_id'])].tp += 1
+                pq_stat[int(gt_segms[gt_label]['category_id'])].iou += iou
                 gt_matched.add(gt_label)
                 pred_matched.add(pred_label)
 
@@ -145,10 +146,10 @@ def pq_compute_single_core_own(proc_id, annotation_set, gt_folder, pred_folder, 
             if gt_label in gt_matched:
                 continue
             # crowd segments are ignored
-            if gt_info['iscrowd'] == 1:
-                crowd_labels_dict[gt_info['category_id']] = gt_label
+            if int(gt_info['iscrowd']) == 1:
+                crowd_labels_dict[int(gt_info['category_id'])] = int(gt_label)
                 continue
-            pq_stat[gt_info['category_id']].fn += 1
+            pq_stat[int(gt_info['category_id'])].fn += 1
 
         # count false positives
         for pred_label, pred_info in pred_segms.items():
