@@ -1,4 +1,4 @@
-import os 
+import os
 import cv2 
 import numpy as np
 import copy 
@@ -59,7 +59,15 @@ assert os.path.isdir(dataset_dir), "The dataset directory doesn't exist in the c
 
 
 testing_dir = os.path.join(Mask2Former_dir, "ade20k_outputs")
-Using_Vitrolife = False   
+Using_Vitrolife = True 
+using_predicted_images = False 
+if using_predicted_images:
+    assert using_predicted_images != Using_Vitrolife, "We can't use predicted images when using Vitrolife images"
+    endings = "out.jpg"
+    image_endings = "prediction"
+else:
+    endings = "gt.png"
+    image_endings = "gt"
 img_string = "Vitrolife_" if Using_Vitrolife else ""
 
 
@@ -72,9 +80,9 @@ if Using_Vitrolife:
     inst_im_path = [os.path.join(Vitrolife_dataset_dir, "annotations_instance_dicts", x) for x in os.listdir(os.path.join(Vitrolife_dataset_dir, "annotations_instance_dicts")) if used_im in x][0]
 else:
     orig_im_path = os.path.join(testing_dir, "jena_0026.png")
-    inst_im_path = os.path.join(testing_dir, "jena_0026_inst_seg_gt.png")
-    sem_im_path = os.path.join(testing_dir, "jena_0026_sem_seg_gt.png")
-    pan_im_path = os.path.join(testing_dir, "jena_0026_pan_seg_gt.png")
+    inst_im_path = os.path.join(testing_dir, "jena_0026_inst_seg_"+endings)
+    sem_im_path = os.path.join(testing_dir, "jena_0026_sem_seg_"+endings)
+    pan_im_path = os.path.join(testing_dir, "jena_0026_pan_seg_"+endings)
 
 orig_im = np.asarray(Image.open(orig_im_path))
 sem_im =  np.asarray(Image.open(sem_im_path))
@@ -89,7 +97,7 @@ if Using_Vitrolife:
             inst_im[inst_dict[class_key]] = PN_count
             PN_count += 1
     pan_im = pan_im[:,:,0]
-else:
+elif not using_predicted_images and not Using_Vitrolife:
     inst_img = np.asarray(Image.open(inst_im_path))
     inst_im = np.zeros_like(inst_img).astype(np.uint8)
     color_count = 1
@@ -104,60 +112,48 @@ else:
     for kk, unique_color in enumerate(unique_colors_sem_im):
         sem_img[np.all(sem_im==unique_color, axis=-1)] = kk
     sem_im = copy.deepcopy(sem_img)
-
-thing_colors, stuff_colors = list(), list()
-while True:
-    new_col = tuple(np.random.randint(low=0, high=255, size=(1,3), dtype=int).squeeze())
-    if new_col not in stuff_colors:
-        stuff_colors.append(new_col)
-    if len(stuff_colors) == len(np.unique(sem_im).tolist()):
-        break 
-while True:
-    new_col = tuple(np.random.randint(low=0, high=255, size=(1,3), dtype=int).squeeze())
-    if new_col not in stuff_colors and new_col not in thing_colors:
-        thing_colors.append(new_col)
-    if len(thing_colors) == len(np.unique(inst_im).tolist()):
-        break 
-
-
-
-stuff_col_numb, thing_col_numb = int(0), int(0)
-panop_colors = list()
-del pan_im
-# pan_im = sem_im + inst_im * 1000000
-# pan_img = np.zeros(shape=(orig_im.shape[0], orig_im.shape[1], 3)).astype(np.uint8)
-# unique_values = np.unique(pan_im).tolist()
-# for kk,unique_value in sorted(enumerate(unique_values)):
-#     if unique_value == 0:
-#         pan_img[pan_im==unique_value] = 0
-#     elif 1 <= unique_value < 5000:
-#         stuff_col_numb += 1
-#         pan_img[pan_im==unique_value] = stuff_colors[stuff_col_numb]
-#     elif unique_value >= 5000:
-#         pan_img[pan_im==unique_value] = thing_colors[thing_col_numb]
-#         thing_col_numb += 1
-# pan_im = copy.deepcopy(pan_img)
-
-stuff_colors.insert(0, (0,0,0))
-thing_colors.insert(0, (0,0,0))
-if isgray(inst_im):
-    inst_im = apply_colormap(mask_img=inst_im, segmentation_type="instance", use_vitrolife=Using_Vitrolife, colors_used=None if Using_Vitrolife else thing_colors)
-if isgray(sem_im):
-    sem_im = apply_colormap(mask_img=sem_im, segmentation_type="semantic", use_vitrolife=Using_Vitrolife, colors_used=None if Using_Vitrolife else stuff_colors)
-if Using_Vitrolife:
-    if isgray(pan_im):
-        pan_im = apply_colormap(mask_img=pan_im, segmentation_type="panoptic", use_vitrolife=Using_Vitrolife, colors_used=None if Using_Vitrolife else panop_colors)
+    thing_colors, stuff_colors = list(), list()
+    while True:
+        new_col = tuple(np.random.randint(low=0, high=255, size=(1,3), dtype=int).squeeze())
+        if new_col not in stuff_colors:
+            stuff_colors.append(new_col)
+        if len(stuff_colors) == len(np.unique(sem_im).tolist()):
+            break 
+    while True:
+        new_col = tuple(np.random.randint(low=0, high=255, size=(1,3), dtype=int).squeeze())
+        if new_col not in stuff_colors and new_col not in thing_colors:
+            thing_colors.append(new_col)
+        if len(thing_colors) == len(np.unique(inst_im).tolist()):
+            break 
+else:
+    inst_im =  np.asarray(Image.open(inst_im_path))
 
 
-pan_im = copy.deepcopy(sem_im)
-unique_values = np.unique(inst_im.reshape(-1,3),axis=0)
-for kk, unique_value in enumerate(unique_values):
-    if np.sum(unique_value) == 0:
-        continue 
-    idx = inst_im==unique_value
-    new_col = tuple(unique_value.squeeze())
-    pan_im = np.multiply(pan_im, ~idx)
-    pan_im = np.add(pan_im, np.multiply(idx, inst_im))
+if not using_predicted_images:
+    if not Using_Vitrolife:
+        stuff_col_numb, thing_col_numb = int(0), int(0)
+        panop_colors = list()
+        del pan_im
+        stuff_colors.insert(0, (0,0,0))
+        thing_colors.insert(0, (0,0,0))
+    if isgray(inst_im):
+        inst_im = apply_colormap(mask_img=inst_im, segmentation_type="instance", use_vitrolife=Using_Vitrolife, colors_used=None if Using_Vitrolife else thing_colors)
+    if isgray(sem_im):
+        sem_im = apply_colormap(mask_img=sem_im, segmentation_type="semantic", use_vitrolife=Using_Vitrolife, colors_used=None if Using_Vitrolife else stuff_colors)
+    if Using_Vitrolife:
+        if isgray(pan_im):
+            pan_im = apply_colormap(mask_img=pan_im, segmentation_type="panoptic", use_vitrolife=Using_Vitrolife, colors_used=None if Using_Vitrolife else panop_colors)
+
+    if not Using_Vitrolife:
+        pan_im = copy.deepcopy(sem_im)
+        unique_values = np.unique(inst_im.reshape(-1,3),axis=0)
+        for kk, unique_value in enumerate(unique_values):
+            if np.sum(unique_value) == 0:
+                continue 
+            idx = inst_im==unique_value
+            new_col = tuple(unique_value.squeeze())
+            pan_im = np.multiply(pan_im, ~idx)
+            pan_im = np.add(pan_im, np.multiply(idx, inst_im))
 
 
 
@@ -182,18 +178,17 @@ orig_inst_sem_pan = cv2.vconcat(src=[orig_and_inst, border_horizontal, sem_and_p
 
 
 
-
 plt.imshow(orig_inst_sem_pan)
 plt.axis("off")
 plt.show(block=False)
 
-Image.fromarray(orig_and_inst).save(fp=os.path.join(testing_dir, img_string+"Original_and_instance_segmentation.jpg"))
-Image.fromarray(orig_and_sem).save(fp=os.path.join(testing_dir, img_string+"Original_and_semantic_segmentation.jpg"))
-Image.fromarray(orig_and_pan).save(fp=os.path.join(testing_dir, img_string+"Original_and_panoptic_segmentation.jpg"))
-Image.fromarray(sem_and_pan_sideways).save(fp=os.path.join(testing_dir, img_string+"Semantic_and_panoptic_segmentation_sideways.jpg"))
-Image.fromarray(inst_and_pan_sideways).save(fp=os.path.join(testing_dir, img_string+"Instance_and_panoptic_segmentation_sideways.jpg"))
-Image.fromarray(inst_and_pan_ontop).save(fp=os.path.join(testing_dir, img_string+"Instance_and_panoptic_segmentation_ontop.jpg"))
-Image.fromarray(orig_inst_sem_pan).save(fp=os.path.join(testing_dir, img_string+"Original_instance_semantic_panoptic.jpg"))
+Image.fromarray(orig_and_inst).save(fp=os.path.join(testing_dir, img_string+"Original_and_instance_segmentation_{}.jpg".format(image_endings)))
+Image.fromarray(orig_and_sem).save(fp=os.path.join(testing_dir, img_string+"Original_and_semantic_segmentation_{}.jpg".format(image_endings)))
+Image.fromarray(orig_and_pan).save(fp=os.path.join(testing_dir, img_string+"Original_and_panoptic_segmentation_{}.jpg".format(image_endings)))
+Image.fromarray(sem_and_pan_sideways).save(fp=os.path.join(testing_dir, img_string+"Semantic_and_panoptic_segmentation_{}_sideways.jpg".format(image_endings)))
+Image.fromarray(inst_and_pan_sideways).save(fp=os.path.join(testing_dir, img_string+"Instance_and_panoptic_segmentation_{}_sideways.jpg".format(image_endings)))
+Image.fromarray(inst_and_pan_ontop).save(fp=os.path.join(testing_dir, img_string+"Instance_and_panoptic_segmentation_{}_ontop.jpg".format(image_endings)))
+Image.fromarray(orig_inst_sem_pan).save(fp=os.path.join(testing_dir, img_string+"Original_instance_semantic_panoptic_{}.jpg".format(image_endings)))
 
 
 alpha_val = 0.5
