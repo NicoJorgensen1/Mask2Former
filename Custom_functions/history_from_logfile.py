@@ -7,6 +7,7 @@ import re
 from detectron2.config import get_cfg 
 from detectron2.projects.deeplab import add_deeplab_config
 from detectron2.data import MetadataCatalog
+from matplotlib import pyplot as plt 
 
 # Save dictionary
 def save_dictionary(dictObject, save_folder, dictName):                                                         # Function to save a dict in the specified folder 
@@ -48,7 +49,7 @@ for segmentation_type in ["semantic", "instance", "panoptic"]:
 
     hist_keys = ["total_loss", "loss_ce", "loss_dice", "loss_mask", "lr", "AP", "AP50", "AP75", "PQ", "SQ", "RQ",
                 "PQ_st", "RQ_st", "SQ_st", "PQ_th", "SQ_th", "RQ_th", "mIoU", "fwIoU", "mACC", "pACC", "iter", "APs", "APm", "APl"]
-    history = {key: list() for key in hist_keys}
+    history = {"val_"+key if not any([x.lower() in key.lower() for x in ["loss", "lr", "iter"]]) else key: list() for key in hist_keys}
     ade20k_inst_log = list()
     for line_numb, line in enumerate(ade20k_logfile):
         if "loss" in line and "INFO" in line and "eta" in line:
@@ -57,28 +58,41 @@ for segmentation_type in ["semantic", "instance", "panoptic"]:
                 if any([x in item.strip() for x in hist_keys]) and not item.strip()[-2].isdigit():
                     key_to_use = np.asarray(hist_keys)[np.asarray([x in item.strip() for x in hist_keys])].item()
                     val_to_use = float(re.findall(r"[-+]?(?:\d*\.\d+|\d+)", res[kk+1].strip())[0])
+                    if key_to_use == "lr":
+                        val_to_use = float(res[kk+1])
                     history[key_to_use].append(val_to_use)
+                
         elif "Task: sem_seg" in line:
             key_line = ade20k_logfile[line_numb+1].strip().split("copypaste:")[-1].strip().split(",")
             value_line = ade20k_logfile[line_numb+2].strip().split("copypaste:")[-1].strip().split(",")
             for key_name, value in zip(key_line, value_line):
                 value = float(re.findall(r"[-+]?(?:\d*\.\d+|\d+)", value.strip())[0])
+                key_name = "val_"+key_name if not any([x.lower() in key_name.lower() for x in ["loss", "lr", "iter"]]) else key_name
                 history[key_name.strip()].append(value)
         elif "Task: segm" in line:
             key_line = ade20k_logfile[line_numb+1].strip().split("copypaste:")[-1].strip().split(",")
             value_line = ade20k_logfile[line_numb+2].strip().split("copypaste:")[-1].strip().split(",")
             for key_name, value in zip(key_line, value_line):
                 value = float(re.findall(r"[-+]?(?:\d*\.\d+|\d+)", value.strip())[0])
+                key_name = "val_"+key_name if not any([x.lower() in key_name.lower() for x in ["loss", "lr", "iter"]]) else key_name
                 history[key_name.strip()].append(value)
         elif "Task: panoptic_seg" in line:
             key_line = ade20k_logfile[line_numb+1].strip().split("copypaste:")[-1].strip().split(",")
             value_line = ade20k_logfile[line_numb+2].strip().split("copypaste:")[-1].strip().split(",")
             for key_name, value in zip(key_line, value_line):
                 value = float(re.findall(r"[-+]?(?:\d*\.\d+|\d+)", value.strip())[0])
+                key_name = "val_"+key_name if not any([x.lower() in key_name.lower() for x in ["loss", "lr", "iter"]]) else key_name
                 history[key_name.strip()].append(value)
 
-    history["train_epoch_num"] = np.arange(0, 20).tolist()
-    history["val_epoch_num"] = np.arange(0, 20).tolist()
+    if "semantic" in segmentation_type.lower():
+        key_used = "mIoU"
+    if "instance" in segmentation_type.lower():
+        key_used = "AP"
+    if "panoptic" in segmentation_type.lower():
+        key_used = "PQ"
+    num_epochs = len(history["val_"+key_used])
+    history["train_epoch_num"] = np.arange(0, num_epochs).tolist()
+    history["val_epoch_num"] = np.arange(0, num_epochs).tolist()
     save_dictionary(dictObject=history, save_folder=ade20k_output_folder, dictName="history_ade20k_{}".format(segmentation_type))
 
 
@@ -88,7 +102,7 @@ for segmentation_type in ["semantic", "instance", "panoptic"]:
         key_val, mov_avg_val = list(), list()                                                           # Initiate lists to store the actual values and the moving-average computed values
         for item in history[key]:
             key_val.append(item)                                                                        # Append the actual key value to the key_val list
-            mov_avg_val.append(mov_avg_array(inp_array=key_val, mov_of_last_n_elements=75, output_last_n_elements=1).item())   # Compute the next mov_avg val for the last 50 elements
+            mov_avg_val.append(mov_avg_array(inp_array=key_val, mov_of_last_n_elements=7, output_last_n_elements=1).item())   # Compute the next mov_avg val for the last 50 elements
         history[key] = mov_avg_val
 
     # Create learning curves 
@@ -108,11 +122,11 @@ for segmentation_type in ["semantic", "instance", "panoptic"]:
     FLAGS.hp_optim=False
     metadata = MetadataCatalog.get(config.DATASETS.TRAIN[0])
     if "instance" in segmentation_type.lower():
-        FLAGS.num_classes = len(metadata.thing_dataset_id_to_contiguous_id.keys())    
+        FLAGS.num_classes = len(metadata.thing_classes)    
     else:
-        FLAGS.num_classes = len(metadata.stuff_dataset_id_to_contiguous_id.keys())
+        FLAGS.num_classes = len(metadata.stuff_classes)
     FLAGS.display_images=True
 
-    show_history(config=config, FLAGS=FLAGS, metrics_train=None, metrics_eval=None, history=history)
+    _ = show_history(config=config, FLAGS=FLAGS, metrics_train=None, metrics_eval=None, history=history)
 
 

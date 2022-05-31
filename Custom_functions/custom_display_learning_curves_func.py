@@ -90,9 +90,17 @@ def extractRelevantHistoryKeys(history, FLAGS):
     SQ_RQ_things = [key for key in history.keys() if any([x in key for x in ["RQ", "SQ"]]) and key.endswith("th")]
     SQ_RQ_stuff = [key for key in history.keys() if any([x in key for x in ["RQ", "SQ"]]) and key.endswith("st")]
 
+    # Get the semantic keys
+    fwIoU = [key for key in history.keys() if all(["fw" in key, "IoU" in key])]
+    mIoU = [key for key in history.keys() if all(["m" in key, "IoU" in key])]
+    mACC_pACC = [key for key in history.keys() if all([any(["m" in key, "p" in key]), key.upper().endswith("ACC")])]
+
+
     # Return the list of lists of keys 
     if len(FLAGS.segmentation) > 1:
         raise(NotImplementedError("Only one type of segmentation at a time is allowed at the moment"))
+    if "Semantic" in FLAGS.segmentation:
+        hist_keys_list = [loss_total, mIoU, loss_ce, loss_dice, loss_mask, fwIoU, mACC_pACC, learn_rate]
     if "Instance" in FLAGS.segmentation:
         hist_keys_list = [loss_total, AP_total, Precision_IoU50, loss_ce,
                         loss_dice, loss_mask, AP_50, AP_75, learn_rate]
@@ -159,6 +167,10 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
         history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_eval, data_split="val", history=history)
 
     hist_keys = extractRelevantHistoryKeys(history, FLAGS)
+    if "Semantic" in FLAGS.segmentation:
+        ax_titles = ["Total_loss", "mIoU", "Loss_CE", "Loss_DICE", "Loss_mask",
+                        "fwIoU", "mACC and pACC", "Learning_rate"]
+        n_cols = (2,3,3)
     if "Instance" in FLAGS.segmentation:
         ax_titles = ["Total_loss", "AP@.5:.05:.95", "Precision_IoU@50", "Loss_CE",
                 "Loss_DICE", "Loss_mask", "AP50", "AP75", "Learning_rate"] 
@@ -215,7 +227,8 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
             if "precision" in ax_titles[ax_count].lower() and y_top_val > 0.20:
                 plt.ylim(bottom=0, top=1) 
             ax_count += 1                                                                               # Increase the subplot counter
-    try: fig.savefig(os.path.join(config.OUTPUT_DIR, "Learning_curves.jpg"), bbox_inches="tight")       # Try and save the figure in the OUTPUR_DIR ...
+    assert len(FLAGS.segmentation) == 1, "Only one type of segmentation is supported at the time at the moment"
+    try: fig.savefig(os.path.join(config.OUTPUT_DIR, "Learning_curves_{}.jpg".format(FLAGS.segmentation[0])), bbox_inches="tight")       # Try and save the figure in the OUTPUR_DIR ...
     except: pass                                                                                        # ... otherwise simply skip saving the figure
     fig.tight_layout()
     fig.show() if FLAGS.display_images==True else plt.close(fig)                                        # If the user chose to not display the figure, the figure is closed
