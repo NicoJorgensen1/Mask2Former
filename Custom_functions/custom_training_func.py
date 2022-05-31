@@ -129,6 +129,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     lr_update_check = np.zeros((FLAGS.patience, 1), dtype=bool)                                             # Preallocating validation array to determine whether or not the learning rate was updated
     quit_training = False                                                                                   # Boolean value determining whether or not to commit early stopping
     epochs_to_run = 1 if hyperparameter_optimization else FLAGS.num_epochs                                  # We'll run only 1 epoch if we are performing HPO
+    epochs_to_run = 1 if FLAGS.inference_only else epochs_to_run                                            # If we are just performing inference, then we'll only see the dataset once 
     train_start_time = time()                                                                               # Now the training starts
     epoch_next_display = FLAGS.display_rate - 1                                                             # The next epoch where the images must be visualized 
 
@@ -156,9 +157,9 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             if quit_training: break                                                                         # If the training must be quitted, break the for loop 
             eval_val_results, val_loader, val_evaluators,_,_ = evaluateResults(FLAGS, config,               # Evaluate the result metrics ...
                     data_split="val", dataloader=val_loader, evaluators=val_evaluators)                     # ... on the training set
-            config.DATASETS.TRAIN = train_dataset                                                           # Set the training dataset back 
             
             # Prepare for the training phase of the next epoch. Switch back to training dataset, save history and learning curves and visualize segmentation results
+            config.DATASETS.TRAIN = train_dataset                                                           # Set the training dataset back 
             history = show_history(config=config, FLAGS=FLAGS, metrics_train=eval_train_results,            # Create and save the learning curves ...
                         metrics_eval=eval_val_results, history=history)                                     # ... including all training and validation metrics
             save_dictionary(dictObject=history, save_folder=config.OUTPUT_DIR, dictName="history")          # Save the history dictionary after each epoch
@@ -189,6 +190,9 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
                 break                                                                                       # break the for loop and stop running more epochs
         except Exception as ex:
             error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, run_type, run_numb, total_runs, ex.args)
+            if isinstance(ex, FloatingPointError):
+                printAndLog(input_to_write="Lowering the learning rate as the loss became nan or inf", logs=logs)
+                config.SOLVER.BASE_LR = config.SOLVER.BASE_LR * FLAGS.lr_gamma
             printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
 
     # Evaluation on the vitrolife test dataset. There is no ADE20K-test dataset.

@@ -58,7 +58,7 @@ def save_dictionary(dictObject, save_folder, dictName):                         
 # Write the new config as a .yaml file
 def write_config_to_file(config):
     config = deepcopy(config)                                                           # Make a hard copy of the config
-    config.pop("custom_key")                                                            # Remove the "custom_key" key-set
+    # config.pop("custom_key")                                                          # Remove the "custom_key" key-set
     config_prefix = "vitrolife_" if "vitrolife" in config.DATASETS.TRAIN[0] else ""     # Prepend 'vitrolife' to the config filename, if we are using the Vitrolife dataset
     config_filename = os.path.join(config.OUTPUT_DIR, "{}config_file.yaml".format(config_prefix))   # Create the config filename
     if os.path.isfile(config_filename):                                                 # If a file already exists with the config filename ...
@@ -105,9 +105,9 @@ parser = default_argument_parser()
 start_time = datetime.now().strftime("%H_%M_%d%b%Y").upper()
 parser.add_argument("--dataset_name", type=str, default="vitrolife", help="Which datasets to train on. Choose between [ADE20K, Vitrolife]. Default: Vitrolife")
 parser.add_argument("--output_dir_postfix", type=str, default=start_time, help="Filename extension to add to the output directory of the current process. Default: now: 'HH_MM_DDMMMYYYY'")
-parser.add_argument("--eval_metric", type=str, default="val_PQ", help="Metric to use in order to determine the 'best' model weights. Default: val_AP")
+parser.add_argument("--eval_metric", type=str, default="val_AP", help="Metric to use in order to determine the 'best' model weights. Default: val_AP")
 parser.add_argument("--optimizer_used", type=str, default="ADAMW", help="Optimizer to use. Available [SGD, ADAMW]. Default: ADAMW")
-parser.add_argument("--segmentation", type=str, default="panoptic", help="The type of segmentation used for this running. Valid arguments [Semantic, Instance, Panoptic]. Default: Panoptic")
+parser.add_argument("--segmentation", type=str, default="instance", help="The type of segmentation used for this running. Valid arguments [Semantic, Instance, Panoptic]. Default: Panoptic")
 parser.add_argument("--num_workers", type=int, default=1, help="Number of workers to use for. Default: 2")
 parser.add_argument("--max_iter", type=int, default=int(1e5), help="Maximum number of iterations to train the model for. <<Deprecated argument. Use 'num_epochs' instead>>. Default: 100000")
 parser.add_argument("--resnet_depth", type=int, default=101, help="The depth of the feature extracting ResNet backbone. Possible values: [18,34,50,101] Default: 101")
@@ -172,7 +172,7 @@ cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                              
 if "nico" in cfg.OUTPUT_DIR.lower():
     FLAGS.num_trials = 2
     FLAGS.num_epochs = 2
-    FLAGS.hp_optim = False   
+    FLAGS.hp_optim = True    
 
 # Create the log file
 log_file = os.path.join(cfg.OUTPUT_DIR, "Training_logs.txt")                            # Initiate the log filename

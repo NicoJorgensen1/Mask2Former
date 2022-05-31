@@ -128,8 +128,10 @@ def changeConfig_withFLAGS(cfg, FLAGS):
 
     # Change the config and add the FLAGS input arguments one by one ... Not pretty, but efficient and doesn't cost memory...
     cfg.custom_key = []
-    for key in vars(FLAGS).keys():
-        cfg.custom_key.append(tuple((key, vars(FLAGS)[key])))
+    for key, value in vars(FLAGS).items():
+        if any([x.lower() in key.lower() for x in ["batch_size"]]):
+            value = int(value) 
+        cfg.custom_key.append(tuple((key, value)))
 
     return cfg 
 
