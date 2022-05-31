@@ -155,7 +155,8 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
     # Create history and list of relevant history keys
     if FLAGS.inference_only==False or FLAGS.hp_optim==False or metrics_train is not None:
         history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_train, data_split="train", history=history)
-    history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_eval, data_split="val", history=history)
+    if metrics_eval is not None:
+        history = combineDataToHistoryDictionaryFunc(config=config, eval_metrics=metrics_eval, data_split="val", history=history)
 
     hist_keys = extractRelevantHistoryKeys(history, FLAGS)
     if "Instance" in FLAGS.segmentation:
@@ -169,7 +170,7 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
     colors = ["blue", "red", "black", "green", "magenta", "cyan", "yellow", "deeppink", "purple",       # Create colors for ... 
                 "peru", "darkgrey", "gold", "springgreen", "orange", "crimson", "lawngreen"]            # ... the line plots
     n_rows, ax_count = 3, 0                                                                             # Initiate values for the number of rows and ax_counter 
-    if FLAGS.num_classes > 10 and "Instance" in FLAGS.segmentation:                                     # If there are more than 10 classes (i.e. for ADE20K_dataset) ...
+    if all([FLAGS.num_classes > 10, "Instance" in FLAGS.segmentation, "vitrolife" in config.DATASETS.TRAIN[0].lower()]):    # If there are more than 10 classes (i.e. for ADE20K_dataset) ...
         n_rows, n_cols = 3, (4,4,4)                                                                     # ... the number of rows and columns gets reduced ...
         class_names = MetadataCatalog[config.DATASETS.TRAIN[0]].thing_classes                           # Get the class names for the dataset
         ax_tuple = [(ii,x) for (ii,x) in enumerate(ax_titles) if "PV_space" not in x and not any([y in x for y in class_names])]    # ... remove the class_specific ax_titles
