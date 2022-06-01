@@ -27,22 +27,25 @@ def custom_augmentation_mapper(config, is_train=True, segmentation_type="instanc
     if not is_train:                                                        # If we are validating the images ...
         transform_list = []                                                 # ... we won't use data augmentation
     else:
-        transform_list = [                                                  # Initiate the list of image data augmentations to use
-            T.Resize((500,500), Image.BILINEAR),                            # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.Resize
-            T.RandomBrightness(0.8, 1.5),                                   # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomBrightness
-            T.RandomLighting(0.7),                                          # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomLighting
-            T.RandomContrast(0.7, 1.3),                                     # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomContrast
-            T.RandomSaturation(0.85, 1.15),                                 # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomSaturation
-            T.RandomRotation(angle=[-45, 45]),                              # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomRotation
-            T.RandomFlip(prob=0.25, horizontal=True, vertical=False),       # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomLighting 
-            T.RandomFlip(prob=0.25, horizontal=False, vertical=True),       # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomLighting  
-            T.RandomCrop("relative", (0.75, 0.75)),                         # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomCrop
-            T.Resize((500,500), Image.BILINEAR)]                            # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.Resize
-    # if "instance" in segmentation_type.lower():
-    # custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=True, augmentations=transform_list)    # Create the mapping from data dictionary to augmented training image
-    custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=True, augmentations=[])    # Create the mapping from data dictionary to augmented training image
-    # if "panoptic" in segmentation_type.lower():
-    #     custom_mapper = COCOPanopticNewBaselineDatasetMapper(config, is_train=True, tfm_gens=transform_list)
+        transform_list = list()                                             # Initiate the list of image data augmentations to use
+        if "vitrolife" in config.DATASETS.TRAIN[0].lower():
+            transform_list.append(T.Resize((500,500), Image.BILINEAR))      # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.Resize
+        transform_list.append(T.RandomBrightness(0.8, 1.5))                 # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomBrightness
+        transform_list.append(T.RandomContrast(0.7, 1.4))                   # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomContrast
+        transform_list.append(T.RandomLighting(1.0))                        # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomLighting
+        transform_list.append(T.RandomSaturation(0.85, 1.15))               # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomSaturation
+        transform_list.append(T.RandomRotation(angle=[-45, 45]))            # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomRotation
+        transform_list.append(T.RandomFlip(prob=0.25, horizontal=True, vertical=False)) # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomLighting 
+        transform_list.append(T.RandomFlip(prob=0.25, horizontal=False, vertical=True)) # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomLighting  
+        transform_list.append(T.RandomCrop("relative", (0.80, 0.80)))       # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.RandomCrop
+        if "vitrolife" in config.DATASETS.TRAIN[0].lower():
+            transform_list.append(T.Resize((500,500), Image.BILINEAR))      # https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.Resize
+        else:
+            transform_list.append(T.ResizeScale(min_scale=1.2, max_scale=1.25)) # Not sure if this works => https://detectron2.readthedocs.io/en/latest/modules/data_transforms.html#detectron2.data.transforms.ResizeScale
+    if "instance" in segmentation_type.lower():
+        custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=True, augmentations=transform_list)    # Create the mapping from data dictionary to augmented training image
+    if "panoptic" in segmentation_type.lower():
+        custom_mapper = MaskFormerPanopticDatasetMapper(config, is_train=True, augmentations=transform_list)
     return custom_mapper
 
 

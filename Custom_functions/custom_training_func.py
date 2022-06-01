@@ -191,7 +191,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
         except Exception as ex:
             error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, run_type, run_numb, total_runs, ex.args)
             if isinstance(ex, FloatingPointError):
-                printAndLog(input_to_write="Lowering the learning rate as the loss became nan or inf", logs=logs)
+                printAndLog(input_to_write="Lowering the learning rate as the loss became nan or inf", logs=logs, postfix="\n")
                 config.SOLVER.BASE_LR = config.SOLVER.BASE_LR * FLAGS.lr_gamma
             printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
 

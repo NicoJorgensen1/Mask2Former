@@ -204,7 +204,7 @@ def show_history(config, FLAGS, metrics_train, metrics_eval, history=None):     
             for kk, key in enumerate(sorted(hist_keys[ax_count], key=str.lower)):                       # Looping through all keys in the history dict that will be shown on the current subplot axes
                 if np.max(history[key]) > y_top_val:                                                    # If the maximum value in the array is larger than the current y_top_val ...
                     y_top_val = np.ceil(np.max(history[key])/2)*2                                       # ... y_top_val is updated and rounded to the nearest 2
-                start_val = np.min(history["val_epoch_num"])-(0 if any([x in key.lower() for x in ["ap", "precision", "pq", "sq", "rq"]]) else 1)   # The evaluation metrics must be plotted from after the first epoch, the losses from epoch=0
+                start_val = np.min(history["val_epoch_num"])-(0 if any([x in key.lower() for x in ["ap", "precision", "pq", "sq", "rq", "iou"]]) else 1)   # The evaluation metrics must be plotted from after the first epoch, the losses from epoch=0
                 x_vals = np.linspace(start=start_val, stop=np.max(history["val_epoch_num"]), num=len(history[key])) # Create the x-axis values as a linearly spaced array from epoch start_val to the latest epoch 
                 if "precision" in key:                                                                  # If "precision" is in the key it means we are plotting a precision-recall curve  ...
                     x_vals = np.round(np.linspace(start=0, stop=1, num=len(history[key])), 2)           # ... with equally spaced recall values of R=[0, 0.01, 1] 

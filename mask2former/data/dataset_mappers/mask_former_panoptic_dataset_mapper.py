@@ -73,13 +73,15 @@ class MaskFormerPanopticDatasetMapper(MaskFormerSemanticDatasetMapper):
         # semantic segmentation
         if "sem_seg_file_name" in dataset_dict:
             # PyTorch transformation not implemented for uint16, so converting it to double first
-            sem_seg_gt = utils.read_image(dataset_dict.pop("sem_seg_file_name")).astype("double")
+            sem_seg_gt = utils.read_image(dataset_dict["sem_seg_file_name"]).astype("double")
+            # sem_seg_gt = utils.read_image(dataset_dict.pop("sem_seg_file_name")).astype("double")
         else:
             sem_seg_gt = None
 
         # panoptic segmentation
         if "pan_seg_file_name" in dataset_dict:
-            pan_seg_gt = utils.read_image(dataset_dict.pop("pan_seg_file_name"), "RGB")
+            pan_seg_gt = utils.read_image(dataset_dict["pan_seg_file_name"], "RGB")
+            # pan_seg_gt = utils.read_image(dataset_dict.pop("pan_seg_file_name"), "RGB")
             segments_info = dataset_dict["segments_info"]
         else:
             pan_seg_gt = None
@@ -135,8 +137,8 @@ class MaskFormerPanopticDatasetMapper(MaskFormerSemanticDatasetMapper):
         if sem_seg_gt is not None:
             dataset_dict["sem_seg"] = sem_seg_gt.long()
 
-        if "annotations" in dataset_dict:
-            raise ValueError("Pemantic segmentation dataset should not have 'annotations'.")
+        # if "annotations" in dataset_dict:
+        #     raise ValueError("Pemantic segmentation dataset should not have 'annotations'.")
 
         # Prepare per-category binary masks
         pan_seg_gt = pan_seg_gt.numpy()
