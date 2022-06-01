@@ -75,7 +75,7 @@ def get_HPO_params(config, FLAGS, trial, hpt_opt=False):
         FLAGS.class_loss_weight = trial.suggest_float(name="class_loss_weight", low=1, high=25) 
         FLAGS.no_object_weight = trial.suggest_float(name="no_object_weight", low=1e-4, high=2)
         if "vitrolife" in FLAGS.dataset_name:
-            FLAGS.num_queries = trial.suggest_int(name="num_queries", low=15, high=150) 
+            FLAGS.num_queries = trial.suggest_int(name="num_queries", low=15, high=250) 
             FLAGS.dropout = trial.suggest_float(name="dropout", low=1e-11, high=0.25)
         if FLAGS.use_transformer_backbone==False and "Instance" not in FLAGS.segmentation:
             FLAGS.resnet_depth = trial.suggest_categorical(name="resnet_depth", choices=[50, 101])

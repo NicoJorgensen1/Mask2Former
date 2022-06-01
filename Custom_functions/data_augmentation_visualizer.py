@@ -1,4 +1,5 @@
-import os 
+import os
+from cv2 import COLOR_HSV2RGB, COLOR_RGB2HSV 
 import numpy as np 
 import shutil 
 import pickle 
@@ -162,7 +163,7 @@ os.chdir(os.path.join(Mask2Former_dir, "Custom_functions"))                     
 sys.path.append(os.path.join(Mask2Former_dir, "tools"))
 ade20k_output_folder = os.path.join(Mask2Former_dir, "ade20k_outputs")
 sys.path.append(ade20k_output_folder)
-dataset_dir = os.path.join("/mnt", "c", "Users", "Nico-", "OneDrive - Aarhus Universitet", "Biomedicinsk Teknologi", "5. semester", "Speciale", "Datasets")                 # Home WSL
+dataset_dir = os.path.join("/mnt", "c", "Users", "Nico-", "OneDrive - Aarhus Universitet", "Alting", "Biomedicinsk Teknologi", "5. semester", "Speciale", "Datasets")                 # Home WSL
 if not os.path.isdir(dataset_dir):
     dataset_dir = os.path.join("C:\\", dataset_dir.split(os.path.sep,1)[1])                                                                  # Home windows computer
 if not os.path.isdir(dataset_dir):
@@ -203,8 +204,8 @@ vitrolife_brightness_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_brightnes
 # Random lightning of [0.7]
 vitrolife_random_light_list = list()
 random_PCA_scaling_values = np.round(np.linspace(start=-25, stop=25, num=4, endpoint=True),2).tolist()
-for random_value in random_PCA_scaling_values:
-    vitrolife_random_light_list.append(fancy_pca(img=vitrolife_img, alpha_std=random_value))
+for kk, random_value in enumerate(random_PCA_scaling_values):
+    vitrolife_random_light_list.append(fancy_pca(img=copy.deepcopy(vitrolife_random_brightness_list[kk]), alpha_std=random_value))
 vitrolife_random_light_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_light_list[0], border_horizontal, vitrolife_random_light_list[1]]),
                             border_vertical, cv2.hconcat([vitrolife_random_light_list[2], border_horizontal, vitrolife_random_light_list[3]])])
 
@@ -212,9 +213,9 @@ vitrolife_random_light_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_light_l
 # Random contrast of [0.7, 1.3]
 vitrolife_random_contrast_list = list()
 random_contrast_values = np.round(np.linspace(start=0.7, stop=1.3, num=4, endpoint=True),2).tolist()
-for contrast_value in random_contrast_values:
+for kk, contrast_value in enumerate(random_contrast_values):
     vitrolife_random_contrast_list.append(torch.reshape(torchvision.transforms.ColorJitter(contrast=(contrast_value,contrast_value)).forward(
-            torch.reshape(torch.from_numpy(copy.deepcopy(vitrolife_img)), shape=vitrolife_img.shape[::-1])), shape=vitrolife_img.shape).numpy())
+            torch.reshape(torch.from_numpy(copy.deepcopy(vitrolife_random_light_list[kk])), shape=vitrolife_img.shape[::-1])), shape=vitrolife_img.shape).numpy())
 vitrolife_contrast_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_contrast_list[0], border_horizontal, vitrolife_random_contrast_list[1]]),
                             border_vertical, cv2.hconcat([vitrolife_random_contrast_list[2], border_horizontal, vitrolife_random_contrast_list[3]])])
 
@@ -222,41 +223,57 @@ vitrolife_contrast_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_contrast_li
 # Random saturation of [0.85, 1.15]
 vitrolife_random_saturation_list = list()
 random_saturation_values = np.round(np.linspace(start=0.85, stop=1.15, num=4, endpoint=True),2).tolist()
-for saturation_value in random_saturation_values:
-    vitrolife_random_saturation_list.append(torch.reshape(torchvision.transforms.ColorJitter(saturation=(saturation_value,saturation_value)).forward(
-            torch.reshape(torch.from_numpy(copy.deepcopy(vitrolife_img)), shape=vitrolife_img.shape[::-1])), shape=vitrolife_img.shape).numpy())
+for kk, saturation_value in enumerate(random_saturation_values):
+    img = copy.deepcopy(vitrolife_random_contrast_list[kk])
+    HSV = cv2.cvtColor(src=img, code=COLOR_RGB2HSV)
+    H,S,V = cv2.split(m=HSV)
+    S2 = np.multiply(S, saturation_value)
+    S2 = np.clip(S2, a_min=0, a_max=255).astype(np.uint8)
+    HSV2 = cv2.merge((H,S2,V))
+    img2 = cv2.cvtColor(src=HSV2, code=COLOR_HSV2RGB)
+    vitrolife_random_saturation_list.append(img2)
 vitrolife_saturation_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_saturation_list[0], border_horizontal, vitrolife_random_saturation_list[1]]),
                             border_vertical, cv2.hconcat([vitrolife_random_saturation_list[2], border_horizontal, vitrolife_random_saturation_list[3]])])
 
 
-# Random cropping of [0.80H, 0.80W]
-vitrolife_random_cropping_list = list()
-random_cropping_values = np.divide(np.floor(np.random.uniform(low=0, high=20, size=(4,2))),100)
-for item in random_cropping_values:
-    start_bottom = int(vitrolife_img.shape[0] * item[1])
-    stop_top = int(vitrolife_img.shape[0] * (item[1] + 0.8))
-    start_left = int(vitrolife_img.shape[1] * item[0])
-    stop_right = int(vitrolife_img.shape[1] * (item[0] + 0.8))
-    cropped_image = copy.deepcopy(vitrolife_img)[start_bottom:stop_top, start_left:stop_right]
-    vitrolife_random_cropping_list.append(cv2.resize(src=cropped_image, dsize=vitrolife_img.shape[:-1], interpolation=cv2.INTER_LINEAR))
-vitrolife_cropping_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_cropping_list[0], border_horizontal, vitrolife_random_cropping_list[1]]),
-                            border_vertical, cv2.hconcat([vitrolife_random_cropping_list[2], border_horizontal, vitrolife_random_cropping_list[3]])])
-
+# first_pixel = vitrolife_img[0,0,:]
+# print("The mean value is {:.3f} with a std of {:.3f}. The first pixel has values {}\n".format(np.mean(vitrolife_img), np.std(vitrolife_img), vitrolife_img[0,0,:]))
+# for item, saturation_value in zip(vitrolife_random_saturation_list, random_saturation_values):
+#     print("The mean value is {:.3f} with a std of {:.3f}. The first pixel has values {}.".format(np.mean(item), np.std(item), item[0,0,:]))
+#     print("")
 
 
 # Random flipping of horizontal and/or vertical with 0.25 pct probability
-vitrolife_random_flipping_list = [vitrolife_img, np.fliplr(vitrolife_img), np.flipud(vitrolife_img), np.fliplr(np.flipud(vitrolife_img))]
+vitrolife_random_flipping_list = [vitrolife_random_saturation_list[0], np.fliplr(vitrolife_random_saturation_list[1]), np.flipud(vitrolife_random_saturation_list[2]), np.fliplr(np.flipud(vitrolife_random_saturation_list[3]))]
 vitrolife_flipping_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_flipping_list[0], border_horizontal, vitrolife_random_flipping_list[1]]),
                             border_vertical, cv2.hconcat([vitrolife_random_flipping_list[2], border_horizontal, vitrolife_random_flipping_list[3]])])
+
+
 
 
 # Random rotation in the range [-45, 45] degrees 
 vitrolife_random_rotation_list = list()
 random_rotation_values = np.round(np.linspace(start=-45, stop=45, num=4, endpoint=True),2).tolist()
-for rotation_value in random_rotation_values:
-    vitrolife_random_rotation_list.append(cv2.resize(ndimage.rotate(copy.deepcopy(vitrolife_img), rotation_value), interpolation=cv2.INTER_LINEAR, dsize=(vitrolife_img.shape[0],vitrolife_img.shape[1])))
+for kk, rotation_value in enumerate(random_rotation_values):
+    vitrolife_random_rotation_list.append(cv2.resize(ndimage.rotate(copy.deepcopy(vitrolife_random_flipping_list[kk]), rotation_value), interpolation=cv2.INTER_LINEAR, dsize=(vitrolife_img.shape[0],vitrolife_img.shape[1])))
 vitrolife_rotation_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_rotation_list[0], border_horizontal, vitrolife_random_rotation_list[1]]),
                             border_vertical, cv2.hconcat([vitrolife_random_rotation_list[2], border_horizontal, vitrolife_random_rotation_list[3]])])
+
+
+
+# Random cropping of [0.80H, 0.80W]
+vitrolife_random_cropping_list = list()
+random_cropping_values = np.divide(np.floor(np.random.uniform(low=0, high=20, size=(4,2))),100)
+for kk, item in enumerate(random_cropping_values):
+    used_img = copy.deepcopy(vitrolife_random_flipping_list[kk])
+    start_bottom = int(used_img.shape[0] * item[1])
+    stop_top = int(used_img.shape[0] * (item[1] + 0.8))
+    start_left = int(used_img.shape[1] * item[0])
+    stop_right = int(used_img.shape[1] * (item[0] + 0.8))
+    cropped_image = copy.deepcopy(used_img)[start_bottom:stop_top, start_left:stop_right]
+    vitrolife_random_cropping_list.append(cv2.resize(src=cropped_image, dsize=vitrolife_img.shape[:-1], interpolation=cv2.INTER_LINEAR))
+vitrolife_cropping_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_cropping_list[0], border_horizontal, vitrolife_random_cropping_list[1]]),
+                            border_vertical, cv2.hconcat([vitrolife_random_cropping_list[2], border_horizontal, vitrolife_random_cropping_list[3]])])
 
 
 
@@ -264,24 +281,44 @@ img_size, n_rows, n_cols, ax_count = 4, 2, 4, 0
 fig = plt.figure(figsize=(n_cols*img_size, n_rows*img_size))
 titles = ["Original image", "Brightness enhanced with\na factor {}".format(brightness_factors), "PCA color augmentation\nwith values {}".format(np.round(np.divide(random_PCA_scaling_values,12.5),2).tolist()),
             "Contrast enhanced with\na factor {}".format(random_contrast_values), "Saturation enhanced with\na factor {}".format(random_saturation_values),
-            "Rotation of\n{} degrees".format([int(x) for x in random_rotation_values]), "Horizontal + vertical flips", "Cropping of [0.80H, 0.80W] pixels"]
-img_list = [vitrolife_img, vitrolife_brightness_imgs, vitrolife_random_light_imgs, vitrolife_contrast_imgs, vitrolife_saturation_imgs, vitrolife_rotation_imgs, vitrolife_flipping_imgs, vitrolife_cropping_imgs]
-
+            "Horizontal + vertical flips", "Rotation of\n{} degrees".format([int(x) for x in random_rotation_values]), "Cropping of [0.80H, 0.80W] pixels"]
+img_list = [vitrolife_img, vitrolife_brightness_imgs, vitrolife_random_light_imgs, vitrolife_contrast_imgs, vitrolife_saturation_imgs, vitrolife_flipping_imgs, vitrolife_rotation_imgs, vitrolife_cropping_imgs]
 
 for row in range(n_rows):
     for col in range(n_cols):
         if ax_count >= len(img_list):
             break 
+        img_used = copy.deepcopy(img_list[ax_count])
+        if ax_count >= 1:
+            img_used = cv2.putText(img_used, "{}A)".format(ax_count+1), (10,60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,0,0),3)
+            img_used = cv2.putText(img_used, "{}B)".format(ax_count+1), (10+border_size+vitrolife_img.shape[0],60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,0,0),3)
+            img_used = cv2.putText(img_used, "{}C)".format(ax_count+1), (10, border_size+vitrolife_img.shape[0]+60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,0,0),3)
+            img_used = cv2.putText(img_used, "{}D)".format(ax_count+1), (10+border_size+vitrolife_img.shape[0],border_size+vitrolife_img.shape[0]+60), cv2.FONT_HERSHEY_SIMPLEX, 2, (255,0,0),3)
+        else:
+            img_used = cv2.putText(img_used, "{}A,B,C,D)".format(ax_count+1), (3,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0),2)
         plt.subplot(n_rows, n_cols, ax_count+1)
-        plt.imshow(scale_img(img_list[ax_count]), cmap="gray")
+        plt.imshow(scale_img(img_used), cmap="gray")
         plt.axis("off")
-        plt.title(titles[ax_count], fontsize=16)
+        plt.title(label=titles[ax_count], fontsize=16)
         ax_count += 1
 fig.tight_layout()
 fig.show()
 fig.savefig(os.path.join(ade20k_output_folder, "Data_augmentation_used.jpg"), bbox_inches="tight")
 
 
+# fig = plt.figure(figsize=(2*img_size, 2*img_size))
+# ax_count = 0
+# for row in range(2):
+#     for col in range(2):
+#         if ax_count >= 4:
+#             break 
+#         plt.subplot(2, 2, ax_count+1)
+#         plt.imshow(vitrolife_random_saturation_list[ax_count], cmap="gray")
+#         plt.axis("off")
+#         plt.title("Saturation enhanced\nwith a factor {}".format(random_saturation_values[ax_count]), fontsize=16)
+#         ax_count += 1
+# fig.tight_layout()
+# fig.show()
 
 
 
