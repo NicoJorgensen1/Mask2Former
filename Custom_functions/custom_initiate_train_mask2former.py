@@ -8,10 +8,11 @@ if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("C:\\", Ma
 if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("/home", "neal", "Panoptic_segmentation_using_deep_neural_networks", "Repositories", "Mask2Former")   # Larac server
 if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("/mnt", "home_shared", Mask2Former_dir.split(os.path.sep, 2)[2])                                      # Balder server
 assert os.path.isdir(Mask2Former_dir), "The Mask2Former directory doesn't exist in the chosen location"
-os.chdir(os.path.join(Mask2Former_dir, "Custom_functions"))                                             # Switch the current directory to the Custom_functions directory
+os.chdir(os.path.join(Mask2Former_dir))                                                                 # Switch the current directory to the Mask2Former directory
 sys.path.append(Mask2Former_dir)                                                                        # Add Mask2Former directory to PATH
 sys.path.append(os.path.join(Mask2Former_dir, "Custom_functions"))                                      # Add Custom_functions directory to PATH
 sys.path.append(os.path.join(Mask2Former_dir, "tools"))                                                 # Add the tools directory to PATH
+sys.path.append(os.path.join(Mask2Former_dir, "mask2former"))                                           # Add the mask2former directory to PATH
 
 # Add the environmental variable DETECTRON2_DATASETS
 dataset_dir = os.path.join("/mnt", "c", "Users", "Nico-", "OneDrive - Aarhus Universitet", "Alting", "Biomedicinsk Teknologi", "5. semester", "Speciale", "Datasets")                 # Home WSL

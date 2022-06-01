@@ -1,9 +1,10 @@
 # Import libraries
 import os                                                                               # Used to navigate the folder structure in the current os
+import sys                                                                              # Used for getting the PATH variable
 import numpy as np                                                                      # Used for computing the iterations per epoch
 import argparse                                                                         # Used to parse input arguments through command line
 import pickle                                                                           # Used to save the history dictionary after training
-from copy import deepcopy
+from copy import deepcopy                                                               # Used to make a hard copy of variables 
 from detectron2.engine import default_argument_parser                                   # Default argument_parser object
 from datetime import datetime                                                           # Used to get the current date and time when starting the process
 from shutil import make_archive                                                         # Used to zip the directory of the output folder
@@ -25,8 +26,13 @@ def rename_output_inference_folder(config):                                     
 # Function to zip the output folder after training has completed
 def zip_output(cfg):
     print("\nZipping the output directory {:s} with {:.0f} files".format(os.path.basename(cfg.OUTPUT_DIR), len(os.listdir(cfg.OUTPUT_DIR))))
+    current_dir = os.getcwd()
+    Mask2Former_dirs = [x for x in sys.path if x.endswith("Mask2Former")]
+    assert len(Mask2Former_dirs)==1, "There can only be one Mask2Former_dir in the PATH"
+    os.chdir(Mask2Former_dirs[0])
     make_archive(base_name=os.path.basename(cfg.OUTPUT_DIR), format="zip",              # Instantiate the zipping of the output directory  where the resulting zip file ...
-        root_dir=os.path.dirname(cfg.OUTPUT_DIR), base_dir=os.path.basename(cfg.OUTPUT_DIR))    # ... will include the output folder (not just the files from the folder)
+        root_dir=os.path.dirname(cfg.OUTPUT_DIR), base_dir=os.path.basename(cfg.OUTPUT_DIR))    # ... will be a zipping of the output folder (not just the files from the folder)
+    os.chdir(current_dir)
 
 
 # Define a function to convert string values into booleans
