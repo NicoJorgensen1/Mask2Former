@@ -128,7 +128,8 @@ class COCOPanopticNewBaselineDatasetMapper:
             return dataset_dict
 
         if "pan_seg_file_name" in dataset_dict:
-            pan_seg_gt = utils.read_image(dataset_dict.pop("pan_seg_file_name"), "RGB")
+            pan_seg_gt = utils.read_image(dataset_dict["pan_seg_file_name"], "RGB")
+            # pan_seg_gt = utils.read_image(dataset_dict.pop("pan_seg_file_name"), "RGB")
             segments_info = dataset_dict["segments_info"]
 
             # apply the same transformation to panoptic segmentation

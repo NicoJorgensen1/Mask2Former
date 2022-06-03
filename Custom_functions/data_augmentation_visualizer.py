@@ -249,8 +249,6 @@ vitrolife_flipping_imgs = cv2.vconcat([cv2.hconcat([vitrolife_random_flipping_li
                             border_vertical, cv2.hconcat([vitrolife_random_flipping_list[2], border_horizontal, vitrolife_random_flipping_list[3]])])
 
 
-
-
 # Random rotation in the range [-45, 45] degrees 
 vitrolife_random_rotation_list = list()
 random_rotation_values = np.round(np.linspace(start=-45, stop=45, num=4, endpoint=True),2).tolist()

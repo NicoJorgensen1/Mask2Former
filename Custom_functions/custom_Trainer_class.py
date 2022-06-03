@@ -45,7 +45,8 @@ def custom_augmentation_mapper(config, is_train=True, segmentation_type="instanc
     if "instance" in segmentation_type.lower():
         custom_mapper = MaskFormerInstanceDatasetMapper(config, is_train=True, augmentations=transform_list)    # Create the mapping from data dictionary to augmented training image
     if "panoptic" in segmentation_type.lower():
-        custom_mapper = MaskFormerPanopticDatasetMapper(config, is_train=True, augmentations=transform_list)
+        # custom_mapper = MaskFormerPanopticDatasetMapper(config, is_train=True, augmentations=transform_list)
+        custom_mapper = COCOPanopticNewBaselineDatasetMapper(config, is_train=True, tfm_gens=transform_list)    # Create the COCO mapping from data dictionary to augmented training images 
     return custom_mapper
 
 

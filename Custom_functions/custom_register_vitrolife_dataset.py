@@ -119,7 +119,7 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
         mask = np.zeros_like(annotation_dict_file[list(annotation_dict_file.keys())[0]])            # Initially, the mask will be empty 
         positive_pixels_list = []                                                                   # Initiate a list to store the number of positive pixels in each mask 
         for key in annotation_dict_file.keys():                                                     # Loop through each key (=object/instance) in the current image
-            if "pn" not in key.lower():                                                             # If the current key is not the PN ... 
+            if "PN" not in key.upper():                                                             # If the current key is not the PN ... 
                 continue                                                                            # ... continue, as only PN's should be "things" classes 
             mask = deepcopy(annotation_dict_file[key])                                              # Get the current mask as the value of the given key 
             if np.sum(mask) < 2:                                                                    # We need at least two positive pixels ...
@@ -277,7 +277,6 @@ def register_vitrolife_data_and_metadata_func(debugging=False, panoptic=False):
                                                                         panoptic_json = reduced_panoptic_json_file_path,        # The filepath to the panoptic json 
                                                                         json_file = reduced_instance_json_file_path,            # The filepath to the instance json 
                                                                         image_root = image_root,
-                                                                        label_divisor = 1,
                                                                         num_files_in_dataset=len(dataset_copy))                 # Write the length of the dataset
     assert any(["vitrolife" in x for x in list(MetadataCatalog)]), "Datasets have not been registered correctly"                # Assuring the dataset has been registered correctly
 

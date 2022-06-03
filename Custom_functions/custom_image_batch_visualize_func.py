@@ -94,12 +94,22 @@ def draw_mask_image(mask_list, lbl_list, meta_data, segment_type="Instance"):
         if class_names[lbl_list[-1]].upper() == "PN":
             PNs_in_image = (lbl_list == lbl_list[-1]).sum()
             class_names = class_names + np.repeat(["PN"], PNs_in_image-1).tolist()
+    list_idx = np.argsort(lbl_list)                                                         # Find the sorting indices of the labels 
+    lbl_list = np.asarray(lbl_list)[list_idx].tolist()                                      # Sort the labels from [low, high] class values
+    mask_list = np.asarray(mask_list)[list_idx].tolist()                                    # Sort the masks accordingly. In this way they will always be drawn in the proper hierarchical way
     final_im = np.zeros(shape=mask_list[0].shape+(3,), dtype=np.uint8)                      # Initiate a colored image to show the masks as a single image 
     PN_count = 0                                                                            # Make a counter to keep track of the PN's in the current image
     for lbl, mask in zip(lbl_list, mask_list):                                              # Iterate through the labels and masks
         class_name = class_names[lbl]                                                       # Find the class name of the current object 
         col_idx = np.where(np.in1d(class_names, class_name))[0][0] + PN_count               # Compute which color the current object will have in the final image 
-        col = class_colors[col_idx]                                                         # Extract the thing color needed for the current object
+        # if col_idx >= len(class_colors):                                                    # Then the model have predicted way to many objects of one class (PNs) for either instance or panoptic segmentation ...
+        #     while True:
+        #         col = tuple(np.random.randint(low=0, high=255, size=(1,3), dtype=int).squeeze())
+        #         if all([col not in class_colors, np.sum(col) >= 30]):
+        #             class_colors.append(col)
+        #             break
+        # else:                                                                               # Then the model has predicted an accurate amount of objects for this class ...
+        col = class_colors[col_idx]                                                     # Extract the thing color needed for the current object
         if len(np.where(mask)[0]) < 4:                                                      # If less than four points are positive in the current mask ...
             continue                                                                        # ... skip this mask, as we then can't draw a bounding box
         if "PN" in class_name.upper():                                                      # If the current object is a PN ...

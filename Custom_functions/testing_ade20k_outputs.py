@@ -49,7 +49,7 @@ if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("C:\\", Ma
 if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("/home", "neal", "Panoptic_segmentation_using_deep_neural_networks", "Repositories", "Mask2Former")   # Larac server
 if not os.path.isdir(Mask2Former_dir): Mask2Former_dir = os.path.join("/mnt", "home_shared", Mask2Former_dir.split(os.path.sep, 2)[2])                                      # Balder server
 assert os.path.isdir(Mask2Former_dir), "The Mask2Former directory doesn't exist in the chosen location"
-dataset_dir = os.path.join("/mnt", "c", "Users", "Nico-", "OneDrive - Aarhus Universitet", "Biomedicinsk Teknologi", "5. semester", "Speciale", "Datasets")                 # Home WSL
+dataset_dir = os.path.join("/mnt", "c", "Users", "Nico-", "OneDrive - Aarhus Universitet", "Alting", "Biomedicinsk Teknologi", "5. semester", "Speciale", "Datasets")                 # Home WSL
 if not os.path.isdir(dataset_dir): dataset_dir = os.path.join("C:\\", dataset_dir.split(os.path.sep,1)[1])                                                                  # Home windows computer
 if not os.path.isdir(dataset_dir): dataset_dir = os.path.join("/mnt", "c", "Users", "wd974261", "Documents", "Python", "Datasets")                                          # Work WSL
 if not os.path.isdir(dataset_dir): dataset_dir = os.path.join("C:\\", dataset_dir.split(os.path.sep,1)[1])                                                                  # Work windows computer
@@ -59,7 +59,7 @@ assert os.path.isdir(dataset_dir), "The dataset directory doesn't exist in the c
 
 
 testing_dir = os.path.join(Mask2Former_dir, "ade20k_outputs")
-Using_Vitrolife = True 
+Using_Vitrolife = False 
 using_predicted_images = False 
 if using_predicted_images:
     assert using_predicted_images != Using_Vitrolife, "We can't use predicted images when using Vitrolife images"
@@ -81,12 +81,16 @@ if Using_Vitrolife:
 else:
     orig_im_path = os.path.join(testing_dir, "jena_0026.png")
     inst_im_path = os.path.join(testing_dir, "jena_0026_inst_seg_"+endings)
+    inst_im_path_pred = os.path.join(testing_dir, "jena_0026_inst_seg_"+"out.jpg")
     sem_im_path = os.path.join(testing_dir, "jena_0026_sem_seg_"+endings)
     pan_im_path = os.path.join(testing_dir, "jena_0026_pan_seg_"+endings)
+    pan_im_path_pred = os.path.join(testing_dir, "jena_0026_pan_seg_"+"out.jpg")
 
 orig_im = np.asarray(Image.open(orig_im_path))
 sem_im =  np.asarray(Image.open(sem_im_path))
 pan_im =  np.asarray(Image.open(pan_im_path))
+inst_im_pred = np.asarray(Image.open(inst_im_path_pred))
+pan_im_pred = np.asarray(Image.open(pan_im_path_pred))
 if Using_Vitrolife:
     with open(inst_im_path, "rb") as fb:
         inst_dict = pickle.load(fb)
@@ -115,19 +119,18 @@ elif not using_predicted_images and not Using_Vitrolife:
     thing_colors, stuff_colors = list(), list()
     while True:
         new_col = tuple(np.random.randint(low=0, high=255, size=(1,3), dtype=int).squeeze())
-        if new_col not in stuff_colors:
+        if new_col not in stuff_colors and np.sum(new_col) > 50:
             stuff_colors.append(new_col)
         if len(stuff_colors) == len(np.unique(sem_im).tolist()):
             break 
     while True:
         new_col = tuple(np.random.randint(low=0, high=255, size=(1,3), dtype=int).squeeze())
-        if new_col not in stuff_colors and new_col not in thing_colors:
+        if new_col not in stuff_colors and new_col not in thing_colors and np.sum(new_col) > 50:
             thing_colors.append(new_col)
         if len(thing_colors) == len(np.unique(inst_im).tolist()):
             break 
 else:
     inst_im =  np.asarray(Image.open(inst_im_path))
-
 
 if not using_predicted_images:
     if not Using_Vitrolife:
@@ -154,7 +157,8 @@ if not using_predicted_images:
             new_col = tuple(unique_value.squeeze())
             pan_im = np.multiply(pan_im, ~idx)
             pan_im = np.add(pan_im, np.multiply(idx, inst_im))
-
+    plt.imshow(inst_im, cmap="gray")
+    plt.show(block=False)
 
 
 border_size = 25 if Using_Vitrolife else 50
@@ -168,6 +172,24 @@ orig_and_sem  = cv2.hconcat(src=[orig_im,border_vertical,sem_im])
 orig_and_pan =  cv2.hconcat(src=[orig_im,border_vertical,pan_im])
 
 border_horizontal = np.multiply(np.ones((border_size, orig_and_pan.shape[1], 3)).astype(np.uint8), border_color).astype(np.uint8)
+
+if not Using_Vitrolife:
+    inst_im_gt = copy.deepcopy(inst_im)
+    inst_im_gt_mask = np.any(a=(inst_im_gt > 0), axis=-1)
+    inst_im_gt_mask_3D = np.transpose(np.stack((inst_im_gt_mask,)*3), [1,2,0])
+    inst_im_gt = np.multiply(orig_im, ~inst_im_gt_mask_3D) + np.multiply(inst_im_gt, 0.7) + np.multiply(orig_im, inst_im_gt_mask_3D)*0.3
+    inst_gt_and_pred_sideways = cv2.hconcat(src=[np.asarray(inst_im_gt).astype(np.uint8), border_vertical, inst_im_pred])
+    plt.imshow(inst_gt_and_pred_sideways, cmap="gray")
+    plt.show(block=False)
+    Image.fromarray(inst_gt_and_pred_sideways).save(fp=os.path.join(testing_dir, img_string+"Instance_GT_and_prediction_{}.jpg".format(image_endings)))
+
+    pan_im_gt = copy.deepcopy(pan_im)
+    pan_im_gt = np.add(np.multiply(orig_im, 0.5), np.multiply(pan_im_gt, 0.6)).astype(np.uint8)
+    pan_gt_and_pred_sideways = cv2.hconcat(src=[np.asarray(pan_im_gt).astype(np.uint8), border_vertical, pan_im_pred])
+    plt.imshow(pan_gt_and_pred_sideways, cmap="gray")
+    plt.show(block=False)
+    Image.fromarray(pan_gt_and_pred_sideways).save(fp=os.path.join(testing_dir, img_string+"Panoptic_GT_and_prediction_{}.jpg".format(image_endings)))
+
 
 inst_and_pan_sideways = cv2.hconcat(src=[inst_im,border_vertical,pan_im])
 inst_and_pan_ontop = cv2.vconcat(src=[inst_im,border_flat,pan_im])
