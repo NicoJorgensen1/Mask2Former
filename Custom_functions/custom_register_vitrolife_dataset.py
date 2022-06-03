@@ -168,8 +168,10 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
         PN_panoptic_count = 1
         for unique_value in unique_values:                                                          # Iterate through all unique mask values 
             panoptic_obj = dict()                                                                   # Initiate a dict for each of the unqiue values in the panoptic mask 
-            panoptic_obj["id"] = rgb2id(np.stack((unique_value,)*3, axis=-1))                       # The object id calculated as ID = R + G*256 + B*256**2
-            panoptic_obj["category_id"] = np.min([unique_value, PN_value])                          # The category_id (class_id) is either the unique value or the value of a PN
+            # panoptic_obj["id"] = rgb2id(np.stack((unique_value,)*3, axis=-1))                       # The object id calculated as ID = R + G*256 + B*256**2
+            panoptic_obj["id"] = unique_value                                                       # The panoptic mask is made as ID masks with values [segment_value*label_divisor+instance_value]
+            # panoptic_obj["category_id"] = np.min([unique_value, PN_value])                          # The category_id (class_id) is either the unique value or the value of a PN
+            panoptic_obj["category_id"] = int(np.floor(np.divide(unique_value, 1000)))              # The category_id (class_id) is either the unique value or the value of a PN
             panoptic_obj["iscrowd"] = 0                                                             # No classes are set to be "iscrowd" in the vitrolife dataset
             panoptic_obj["isthing"] = True if panoptic_obj["category_id"] == PN_value else False    # If the category ID represents a PN, then 'isthing' is true 
             panoptic_obj["label_name"] = panoptic_class_labels[np.min([unique_value, np.max(list(panoptic_class_labels.keys()))])],
@@ -209,7 +211,13 @@ def register_vitrolife_data_and_metadata_func(debugging=False, panoptic=False):
     stuff_colors = [(0,0,0), (255,0,0), (0,255,0), (0,0,255), (255,255,0), (185,220,255)]           # Set random colors for when the images will be visualized
     stuff_id = {kk: key for kk,key in enumerate(range(len(stuff_class_labels.keys())))}             # Create a dictionary with the class_id's as both keys and values
     panoptic_colors = stuff_colors[:-1] + thing_colors 
-    panoptic_id = {key: key+1 for kk,key in enumerate(list(panoptic_class_labels.keys()))}
+    panoptic_PN_count = 0
+    panoptic_id = dict()
+    for class_idx, class_label in enumerate(list(panoptic_class_labels.values())):
+        if "PN" in class_label.upper():
+            panoptic_PN_count += 1
+        panoptic_class_id = (class_idx+1) * 1000 + panoptic_PN_count 
+        panoptic_id[class_idx] = panoptic_class_id
     # For panoptic registration
     image_root = os.path.join(vitrolife_dataset_filepath, "raw_images")
     panoptic_root = os.path.join(vitrolife_dataset_filepath, "annotations_panoptic_masks")
