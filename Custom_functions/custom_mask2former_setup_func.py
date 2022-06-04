@@ -98,6 +98,7 @@ def changeFLAGS(FLAGS):
     if FLAGS.inference_only: FLAGS.num_epochs = 1                                       # If we are only using inference, then we'll only run through one epoch
     FLAGS.HPO_current_trial = 0                                                         # A counter for the number of trials of hyperparameter optimization performed 
     FLAGS.epoch_num = 0                                                                 # A counter iterating over the number of epochs 
+    FLAGS.label_divisor = 1000                                                          # The label divisor used for computing IDs from pixel values. Similar to what COCO uses
     FLAGS.HPO_best_metric = np.inf if "loss" in FLAGS.eval_metric.lower() else -np.inf  # Create variable to keep track of the best results obtained when performing HPO
     FLAGS.quit_training = False                                                         # The initial value for the "quit_training" parameter should be False
     FLAGS.ignore_label = 0 if FLAGS.ignore_background else 255                          # As default no labels will be ignored     

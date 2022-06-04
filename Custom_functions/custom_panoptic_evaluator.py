@@ -91,8 +91,8 @@ def pq_compute_single_core_own(proc_id, annotation_set, gt_folder, pred_folder, 
             pan_pred = np.stack((pan_pred,)*3, axis=-1)
         pan_pred = rgb2id(pan_pred)
 
-        gt_segms = {float(el['id']): el for el in gt_ann['segments_info']}
-        pred_segms = {el['id']: el for el in pred_ann['segments_info']}
+        gt_segms = {int(el['id']): el for el in gt_ann['segments_info']}
+        pred_segms = {int(el['id']): el for el in pred_ann['segments_info']}
         
         # predicted segments area calculation + prediction sanity checks
         pred_labels_set = set(el['id'] for el in pred_ann['segments_info'])
@@ -104,7 +104,9 @@ def pq_compute_single_core_own(proc_id, annotation_set, gt_folder, pred_folder, 
                 raise KeyError('In the image with ID {} segment with ID {} is presented in PNG and not presented in JSON.'.format(gt_ann['image_id'], label))
             pred_segms[label]['area'] = label_cnt
             pred_labels_set.remove(label)
-            if str(pred_segms[label]['category_id']) not in [str(x) for x in list(categories.keys())]:
+            category_keys = [int(x) for x in list(categories.keys())]
+            pred_seg_lbl_category = int(pred_segms[label]['category_id'])
+            if pred_seg_lbl_category not in category_keys:
                 raise KeyError('In the image with ID {} segment with ID {} has unknown category_id {}.'.format(gt_ann['image_id'], label, pred_segms[label]['category_id']))
         if len(pred_labels_set) != 0:
             raise KeyError('In the image with ID {} the following segment IDs {} are presented in JSON and not presented in PNG.'.format(gt_ann['image_id'], list(pred_labels_set)))
@@ -199,7 +201,12 @@ def pq_compute_own(gt_json_file, pred_json_file, gt_folder=None, pred_folder=Non
         gt_folder = gt_json_file.replace('.json', '')
     if pred_folder is None:
         pred_folder = pred_json_file.replace('.json', '')
-    categories = {el['id']: el for el in gt_json['categories']}
+    categories = dict()
+    for kk, item in enumerate(gt_json["categories"]):
+        categories[kk+1] = item
+        categories[kk+1]["id"] = int(categories[kk+1]["id"])
+        categories[kk+1]["isthing"] = int(categories[kk+1]["isthing"])
+    # categories = {int(el['id']): el for el in gt_json['categories']}
 
     print("Evaluation panoptic segmentation metrics:")
     print("Ground truth:")

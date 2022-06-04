@@ -94,9 +94,6 @@ def draw_mask_image(mask_list, lbl_list, meta_data, segment_type="Instance"):
         if class_names[lbl_list[-1]].upper() == "PN":
             PNs_in_image = (lbl_list == lbl_list[-1]).sum()
             class_names = class_names + np.repeat(["PN"], PNs_in_image-1).tolist()
-    list_idx = np.argsort(lbl_list)                                                         # Find the sorting indices of the labels 
-    lbl_list = np.asarray(lbl_list)[list_idx].tolist()                                      # Sort the labels from [low, high] class values
-    mask_list = np.asarray(mask_list)[list_idx].tolist()                                    # Sort the masks accordingly. In this way they will always be drawn in the proper hierarchical way
     final_im = np.zeros(shape=mask_list[0].shape+(3,), dtype=np.uint8)                      # Initiate a colored image to show the masks as a single image 
     PN_count = 0                                                                            # Make a counter to keep track of the PN's in the current image
     for lbl, mask in zip(lbl_list, mask_list):                                              # Iterate through the labels and masks
@@ -188,6 +185,15 @@ def NMS_pred(y_pred_dict, data, meta_data, conf_thresh, IoU_thresh):
     return y_pred_mask, used_masks 
 
 
+def panoptic_classes_and_masks_from_ID(pan_ID_mask, label_divisor=1000):
+    unique_values = sorted(np.unique(pan_ID_mask).tolist())
+    class_list, mask_list = list(), list()
+    for unique_value in unique_values:
+        class_list.append(int(np.floor(np.divide(unique_value, label_divisor))))
+        mask_list.append(pan_ID_mask == unique_value)
+    return class_list, mask_list
+
+
 # Define a function to predict some label-masks for the dataset
 def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, model_done_training=False, device="cpu", matching_type="Hungarian"):
     if model_done_training==False:                                                          # If the model hasn't finished training ...
@@ -239,28 +245,18 @@ def create_batch_img_ytrue_ypred(config, data_split, FLAGS, data_batch=None, mod
             else: y_pred,_ = NMS_pred(y_pred_dict=y_pred_dict, data=data, conf_thresh=FLAGS.conf_threshold, # Else, the matching will be done ...
                     IoU_thresh=FLAGS.IoU_threshold, meta_data=meta_data)                    # ... using plain non max suppression 
         if "Panoptic" in FLAGS.segmentation:
-            pan_seg_mask = np.asarray(Image.open(data["pan_seg_file_name"]))
-            unique_values = np.unique(pan_seg_mask).tolist()
-            true_classes = [np.min([len(meta_data.panoptic_classes), x]) for x in unique_values]
-            true_masks = list()
-            for unique_value in unique_values:
-                true_masks.append(pan_seg_mask[:,:,0] == unique_value)
-            y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data, segment_type="Panoptic")
-            y_pred = predictor.__call__(img)["panoptic_seg"]
-            if "vitrolife" in FLAGS.dataset_name.lower():
-                y_pred_img = id2rgb(y_pred[0].numpy())
-                unique_colors = np.unique(y_pred_img.reshape(-1,3),axis=0)
-                if np.sum(unique_colors) > 0:
-                    printAndLog(input_to_write="The unique colors of the predicted image is: {}".format(unique_colors), logs=FLAGS.log_file)
-                assert np.array_equal(y_pred_img[:,:,0], y_pred_img[:,:,1]) and np.array_equal(y_pred_img[:,:,0], y_pred_img[:,:,2])
-                y_pred_img = y_pred_img[:,:,0]
-            else:
+            if "vitrolife" not in FLAGS.dataset_name.lower():
                 raise(NotImplementedError("Panoptic segmentation is only implemented on Vitrolife dataset at the moment"))
-            unique_values = np.unique(y_pred_img).tolist()
-            pred_masks = list()
-            for unique_value in unique_values:
-                pred_masks.append(y_pred_img == unique_value)
-            pred_lbls = np.add(unique_values, 1).tolist()
+            # Creating the y_true panoptic image 
+            pan_seg_mask = np.asarray(Image.open(data["pan_seg_file_name"]))
+            pan_ID_mask = rgb2id(pan_seg_mask)
+            true_classes, true_masks = panoptic_classes_and_masks_from_ID(pan_ID_mask=pan_ID_mask, label_divisor=FLAGS.label_divisor)
+            y_true = draw_mask_image(mask_list=true_masks, lbl_list=true_classes, meta_data=meta_data, segment_type="Panoptic")
+
+            # Creating the y_pred panoptic image 
+            y_pred = predictor.__call__(img)["panoptic_seg"]
+            y_pred_img = y_pred[0].numpy()
+            pred_lbls, pred_masks = panoptic_classes_and_masks_from_ID(pan_ID_mask=y_pred_img, label_divisor=FLAGS.label_divisor)
             y_pred = draw_mask_image(mask_list=pred_masks, lbl_list=pred_lbls, meta_data=meta_data, segment_type="Panoptic")
             # plt.imshow(y_pred, cmap="gray")
             # plt.show(block=False)
@@ -304,6 +300,8 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
     if "Panoptic" in FLAGS.segmentation:
         class_colors = list(reversed(deepcopy(MetadataCatalog.get(config.DATASETS.TRAIN[0]).panoptic_colors[:-1]))) # Create a list of the thing colors
         class_names = deepcopy(MetadataCatalog.get(config.DATASETS.TRAIN[0]).panoptic_classes)[:-1] + ["PN{}".format(x) for x in range(1,8)]   # Create a list of the class names used with numbered PNs
+    if "PN" in class_names[-1].upper():
+        class_names = list(reversed(class_names))
     colors_with_alpha = list()                                                              # Initiate a list of colors with alpha values 
     for thing_color in class_colors:                                                        # Iterate over all colors in the class_colors list
         t_col = tuple()                                                                     # Create a new tuple value 
@@ -322,7 +320,6 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
         # Extract information about the dataset used
         img_ytrue_ypred, data_batch, FLAGS, config = create_batch_img_ytrue_ypred(config=config, data_split=data_split, # Create the batch of images that needs to be visualized ...
             FLAGS=FLAGS, data_batch=data_batch, model_done_training=model_done_training, device=device, matching_type=matching_type) # ... and return the images in the data_batch dictionary
-        class_names = list(reversed(class_names))
         if "vitrolife" in FLAGS.dataset_name.lower():                                       # If we are working on the vitrolife dataset sort the ...
             data_batch = sorted(data_batch, key=lambda x: x["image_custom_info"]["PN_image"])   # ... data_batch after the number of PN per found image
             img_ytrue_ypred = sort_dictionary_by_PN(data=img_ytrue_ypred)                   # And then also sort the data dictionary

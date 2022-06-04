@@ -38,7 +38,7 @@ sys.path.append(ade20k_output_folder)
 from mask2former import add_maskformer2_config
 from custom_display_learning_curves_func import show_history, mov_avg_array
 
-for segmentation_type in ["instance"]:# ["semantic", "instance", "panoptic"]:
+for segmentation_type in ["semantic"]:# ["semantic", "instance", "panoptic"]:
     ade20k_logfile_list = [os.path.join(ade20k_output_folder, x) for x in os.listdir(ade20k_output_folder) if "ade20k_{}_logfile".format(segmentation_type) in x]
     if len(ade20k_logfile_list) != 1:
         print("For the {} segmentation {} logfiles were found!".format(segmentation_type, len(ade20k_logfile_list)))
