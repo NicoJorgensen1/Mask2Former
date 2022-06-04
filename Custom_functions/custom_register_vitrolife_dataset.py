@@ -65,6 +65,8 @@ def pickSamplesWithUniquePN(dataset_dict):
 def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=False):
     # Find the folder containing the vitrolife dataset  
     vitrolife_dataset_filepath = os.path.join(os.getenv("DETECTRON2_DATASETS"), "Vitrolife_dataset")    # Get the path to the vitrolife dataset
+    dataset_dir_end_number = ""                                                                     # This is how it is normally, 
+    dataset_dir_end_number = "3"                                                                    # This is how it is temporarily while changing dataset folders while other scripts are running 
     
     # Find the metadata file
     metadata_file = os.path.join(vitrolife_dataset_filepath, "metadata.csv")                        # Get the csv file with the metadata for all images
@@ -91,23 +93,23 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
         row["img_file"] = os.path.join(vitrolife_dataset_filepath, "raw_images", img_filename)      # Add the current filename for the input image to the row-variable
 
         sem_seg_mask_filename_list = [x for x in os.listdir(os.path.join(vitrolife_dataset_filepath,# Find the corresponding ...
-                'annotations_semantic_masks')) if img_filename_wo_ext in x and x.endswith(".png")]  # ... semantic mask filename
+                'annotations_semantic_masks'+dataset_dir_end_number)) if img_filename_wo_ext in x and x.endswith(".png")]  # ... semantic mask filename
         if len(sem_seg_mask_filename_list) != 1:                                                    # If either zero masks or more than one mask is found ...
             continue                                                                                # ... skip the current image 
         sem_seg_mask_filename = os.path.join(vitrolife_dataset_filepath,                            # Get the mask filename used for ...
-                "annotations_semantic_masks", sem_seg_mask_filename_list[0])                        # ... semantic segmentation as a string 
+                "annotations_semantic_masks"+dataset_dir_end_number, sem_seg_mask_filename_list[0]) # ... semantic segmentation as a string 
         panoptic_mask_filename_list = [x for x in os.listdir(os.path.join(vitrolife_dataset_filepath,   # Find the corresponding ...
-                'annotations_panoptic_masks')) if img_filename_wo_ext in x and x.endswith(".png")]  # ... panoptic mask filename
+                'annotations_panoptic_masks'+dataset_dir_end_number)) if img_filename_wo_ext in x and x.endswith(".png")]   # ... panoptic mask filename
         if len(panoptic_mask_filename_list) != 1:                                                   # If we haven't found one and only one panoptic image file ...
             continue                                                                                # ... then skip this image ... 
         panoptic_mask_filename = os.path.join(vitrolife_dataset_filepath,                           # Read the filename ...
-                "annotations_panoptic_masks", panoptic_mask_filename_list[0])                       # ... for the panoptic mask 
+                "annotations_panoptic_masks"+dataset_dir_end_number, panoptic_mask_filename_list[0])    # ... for the panoptic mask 
         annotation_dict_filenames = [x for x in os.listdir(os.path.join(vitrolife_dataset_filepath, # Find the corresponding ...
-                'annotations_instance_dicts')) if img_filename_wo_ext in x and x.endswith(".pkl")]  # ... annotation dictionary filename
-        if len(annotation_dict_filenames) != 1:                                            # Continue only if we find only one dict filename
+                'annotations_instance_dicts'+dataset_dir_end_number)) if img_filename_wo_ext in x and x.endswith(".pkl")]   # ... annotation dictionary filename
+        if len(annotation_dict_filenames) != 1:                                                     # Continue only if we find only one dict filename
             continue 
         annotation_dict_filename = os.path.join(vitrolife_dataset_filepath,                         # Read the annotation ...
-                'annotations_instance_dicts', annotation_dict_filenames[0])                         # ... dictionary filename
+                'annotations_instance_dicts'+dataset_dir_end_number, annotation_dict_filenames[0])  # ... dictionary filename
         with open(annotation_dict_filename, "rb") as anno_file:                                     # Open a file handler for the current annotation pickle file
             annotation_dict_file = pickle.load(anno_file)                                           # Read the current annotation pickle file 
         
@@ -195,7 +197,7 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
         img_mask_pair_list.append(current_pair)                                                     # Append the dictionary for the current pair to the list of images for the given dataset
         count += 1                                                                                  # Increase the sample counter 
         if "nico" in vitrolife_dataset_filepath.lower():                                            # If we are working on my local computer ...
-            if count >= 20:                                                                         # ... and 20 images have already been loaded ...
+            if count >= 20000:                                                                         # ... and 20 images have already been loaded ...
                 break                                                                               # ... then that is enough, thus quit reading the rest of the images 
     assert len(img_mask_pair_list) >= 1, print("No image/mask pairs found in {:s} subfolders 'raw_image' and 'masks'".format(vitrolife_dataset_filepath))
     if debugging==True: img_mask_pair_list=pickSamplesWithUniquePN(img_mask_pair_list)              # If we are debugging, we'll only get one sample with each number of PN's 
