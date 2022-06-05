@@ -193,6 +193,9 @@ if not "false" in FLAGS.history_dict_used.lower():
                 FLAGS.history = deepcopy(pickle.load(hist_file))
             except EOFError as ex:
                 break 
+        if FLAGS.history is not None:
+            for key, value in FLAGS.history.items():
+                FLAGS.history[key] = FLAGS.history[key][:FLAGS.start_epoch]
 
 
 # Change FLAGS num trials and epochs if on my local computer
