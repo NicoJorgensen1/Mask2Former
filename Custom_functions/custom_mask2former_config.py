@@ -52,6 +52,13 @@ def createVitrolifeConfiguration(FLAGS):
     cfg.MODEL.MASK_FORMER.TEST.SEMANTIC_ON = "Semantic" in FLAGS.segmentation                       # Whether or not the semantic segmentation head will be turned on
     cfg.MODEL.MASK_FORMER.TEST.INSTANCE_ON = "Instance" in FLAGS.segmentation                       # Whether or not the instance segmentation head will be turned on
     cfg.MODEL.MASK_FORMER.TEST.PANOPTIC_ON = "Panoptic" in FLAGS.segmentation                       # Whether or not the panoptic segmentation head will be turned on
+
+    if "false" not in FLAGS.model_weights_used.lower():
+        cfg.MODEL.WEIGHTS = FLAGS.model_weights_used 
+
+    # Output values
+    cfg.OUTPUT_DIR = os.path.join(Mask2Former_dir, "output_{:s}{:s}".format("vitrolife_" if "vitro" in FLAGS.dataset_name.lower() else "", FLAGS.output_dir_postfix))   # Get Mask2Former directory and name the output directory
+    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)                                                      # Create the output folder, if it doesn't already exist
     return cfg
 
 
@@ -110,11 +117,6 @@ def changeConfig_withFLAGS(cfg, FLAGS):
     cfg.INPUT.SIZE_DIVISIBILITY = 500                                                               # The inputs are all 500x500 pixels 
     cfg.INPUT.FORMAT = "BGR"                                                                        # The input format is set to be BGR, like the visualization method
     cfg.INPUT.MIN_SIZE_TRAIN_SAMPLING = "choice"                                                    # Random sampling of the input images 
-
-    # Output values
-    Mask2Former_dir = [x for x in sys_PATH if x.endswith("Mask2Former")][0]                         # Get the path of the Mask2Former directory
-    cfg.OUTPUT_DIR = os.path.join(Mask2Former_dir, "output_{:s}{:s}".format("vitrolife_" if "vitro" in FLAGS.dataset_name.lower() else "", FLAGS.output_dir_postfix))   # Get Mask2Former directory and name the output directory
-    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)                                                      # Create the output folder, if it doesn't already exist
 
     # Test values 
     cfg.TEST.EVAL_PERIOD = 0                                                                        # We won't use the build in evaluation, only the custom evaluation function

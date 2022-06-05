@@ -125,7 +125,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     if FLAGS.inference_only: objective_mode = "inference"
     if hyperparameter_optimization: objective_mode = "hyperparameter optimization trial {:d}/{:d}".format(FLAGS.HPO_current_trial+1, FLAGS.num_trials)
     printAndLog(input_to_write="Start {:s}...".format(objective_mode).upper(), logs=logs, postfix="\n")     # Print and log a message saying that a new iteration is now starting
-    train_loader, val_loader, train_evaluators, val_evaluators, history, eval_train_results = None, None, None, None, None, None    # Initiates all the these as None values
+    train_loader, val_loader, train_evaluators, val_evaluators, eval_train_results = None, None, None, None, None    # Initiates all the these as None values
     train_mode = "min" if "loss" in FLAGS.eval_metric else "max"                                            # Compute the mode of which the performance should be measured. Either a negative or a positive value is better
     new_best = np.inf if train_mode=="min" else -np.inf                                                     # Initiate the original "best_value" as either infinity or -infinity according to train_mode
     best_epoch = 0                                                                                          # Initiate the best epoch as being epoch_0, i.e. before doing any model training
@@ -137,6 +137,7 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     epochs_to_run = 1 if FLAGS.inference_only else epochs_to_run                                            # If we are just performing inference, then we'll only see the dataset once 
     train_start_time = time()                                                                               # Now the training starts
     epoch_next_display = FLAGS.display_rate - 1                                                             # The next epoch where the images must be visualized 
+    history = deepcopy(FLAGS.history) 
 
     # Change the FLAGS and config parameters and perform either hyperparameter optimization, use the best found parameters or simply just train
     config, FLAGS = get_HPO_params(config=cfg, FLAGS=FLAGS, trial=trial, hpt_opt=hyperparameter_optimization)

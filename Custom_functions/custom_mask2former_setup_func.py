@@ -104,6 +104,11 @@ def changeFLAGS(FLAGS):
     FLAGS.ignore_label = 0 if FLAGS.ignore_background else 255                          # As default no labels will be ignored     
     if "Instance" in FLAGS.segmentation and FLAGS.use_transformer_backbone == False:
         FLAGS.resnet_depth = 50
+    FLAGS.history = None 
+    if "false" not in FLAGS.best_params_used.lower():
+        assert os.path.isfile(FLAGS.best_params_used), "The given path for the best parameters {} is not an existing file".format(FLAGS.best_params_used)
+        with open(FLAGS.best_params_used, "rb") as fp:
+            FLAGS.best_params = pickle.load(fp) 
     return FLAGS
 
 
@@ -140,6 +145,9 @@ parser.add_argument("--lr_gamma", type=float, default=0.15, help="The update fac
 parser.add_argument("--backbone_multiplier", type=float, default=0.10, help="The multiplier for the backbone learning rate. Backbone_lr = learning_rate * backbone_multiplier. Default: 0.15")
 parser.add_argument("--weight_decay", type=float, default=1e-4, help="The weight decay used for the model. Default: 1e-4")
 parser.add_argument("--min_delta", type=float, default=5e-4, help="The minimum improvement the model must have made in order to be accepted as an actual improvement. Default 5e-4")
+parser.add_argument("--best_params_used", type=str, default="False", help="Path to dictionary containing the best parameters found after a HPO search. Default: 'False'")
+parser.add_argument("--history_dict_used", type=str, default="False", help="Path to history pickle dictionary from earlier training to continue from. Default: 'False'")
+parser.add_argument("--model_weights_used", type=str, default="False", help="Path to model weights from earlier training to continue from. Default: 'False'")
 parser.add_argument("--ignore_background", type=str2bool, default=False, help="Whether or not we are ignoring the background class. True = Ignore background, False = reward/penalize for background predictions. Default: False")
 parser.add_argument("--crop_enabled", type=str2bool, default=False, help="Whether or not cropping is allowed on the images. Default: False")
 parser.add_argument("--hp_optim", type=str2bool, default=True, help="Whether or not we are initiating the training with a hyperparameter optimization. Default: True")
@@ -151,18 +159,19 @@ parser.add_argument("--debugging", type=str2bool, default=False, help="Whether o
 FLAGS = parser.parse_args()
 FLAGS = changeFLAGS(FLAGS)
 
+# Create the initial configuration
+cfg = createVitrolifeConfiguration(FLAGS=FLAGS)                                         # Create the custom configuration used to e.g. build the model
+too_few_gpus_str, gpus_used_string, available_mem_info = assign_free_gpus(max_gpus=FLAGS.num_gpus)  # Assigning the running script to the selected amount of GPU's with the largest memory available
+
 
 # Setup functions
-too_few_gpus_str, gpus_used_string, available_mem_info = assign_free_gpus(max_gpus=FLAGS.num_gpus)  # Assigning the running script to the selected amount of GPU's with the largest memory available
 if "vitrolife" in FLAGS.dataset_name.lower():                                           # If we want to work with the Vitrolife dataset ...
     register_vitrolife_data_and_metadata_func(debugging=FLAGS.debugging, panoptic="Panoptic" in FLAGS.segmentation) # ... register the vitrolife dataset
 else:                                                                                   # Otherwise, if we are working on the ade20k dataset ...
     for split in ["train", "val"]:                                                      # ... then we will find the training and the validation set
         MetadataCatalog["ade20k_instance_{:s}".format(split)].num_files_in_dataset = len(DatasetCatalog["ade20k_instance_{:s}".format(split)]())  # ... and create a key-value pair telling the number of files in the dataset
 
-
-# Create the initial configuration, define FLAGS epoch variables and alter the configuration
-cfg = createVitrolifeConfiguration(FLAGS=FLAGS)                                         # Create the custom configuration used to e.g. build the model
+# Define FLAGS epoch variables and alter the configuration
 FLAGS.num_train_files = MetadataCatalog[cfg.DATASETS.TRAIN[0]].num_files_in_dataset     # Write the number of training files to the FLAGS namespace
 FLAGS.num_val_files = MetadataCatalog[cfg.DATASETS.TEST[0]].num_files_in_dataset        # Write the number of validation files to the FLAGS namespace
 FLAGS.batch_size = np.min([FLAGS.batch_size, FLAGS.num_train_files])                    # The batch size can't be greater than the number of files in the dataset
@@ -174,6 +183,17 @@ FLAGS.conf_threshold = 0.50                                                     
 FLAGS.IoU_threshold = 0.40                                                              # The maximum overlap between two prediction masks before assuming they are different objects 
 FLAGS.PN_mean_pixel_area = 1363                                                         # Set the mean pixel area of a PN 
 cfg = changeConfig_withFLAGS(cfg=cfg, FLAGS=FLAGS)                                      # Set the final values for the config
+
+# Read the old history, if that is given 
+if not "false" in FLAGS.history_dict_used.lower():
+    assert os.path.isfile(FLAGS.history_dict_used), "The history doesn't exist on the given path {}".format(FLAGS.history_dict_used)
+    with open(FLAGS.history_dict_used.lower(), "rb") as hist_file:
+        while True:
+            try:
+                FLAGS.history = deepcopy(pickle.load(hist_file))
+            except EOFError as ex:
+                break 
+
 
 # Change FLAGS num trials and epochs if on my local computer
 if "nico" in cfg.OUTPUT_DIR.lower():
