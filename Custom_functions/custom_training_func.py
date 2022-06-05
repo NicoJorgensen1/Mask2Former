@@ -145,8 +145,8 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
     run_type = "trial" if hyperparameter_optimization else "epoch"                                          # Either we are in a HPO trial or an epoch 
     total_runs = FLAGS.num_trials if hyperparameter_optimization else FLAGS.num_epochs                      # Get the total number of trials or epochs to run for 
     for epoch in range(epochs_to_run):                                                                      # Iterate over the chosen amount of epochs
-        # run_numb = FLAGS.HPO_current_trial+1 if hyperparameter_optimization else epoch+1                    # Get the current trial or the current epoch number 
-        # try:
+        run_numb = FLAGS.HPO_current_trial+1 if hyperparameter_optimization else epoch+1                    # Get the current trial or the current epoch number 
+        try:
             epoch_start_time = time()                                                                       # Now this new epoch starts
             if FLAGS.inference_only==False:
                 config, quit_training = launch_custom_training(FLAGS=FLAGS, config=config, dataset=train_dataset,   # Launch the training ...
@@ -193,12 +193,12 @@ def objective_train_func(trial, FLAGS, cfg, logs, data_batches=None, hyperparame
             if all([quit_training, hyperparameter_optimization==False]):                                    # If the early stopping callback says we need to quit the training ...
                 printAndLog(input_to_write="Committing early stopping at epoch {:d}. The best {:s} is {:.3f} from epoch {:d}".format(epoch+1, FLAGS.eval_metric, new_best, best_epoch), logs=logs)
                 break                                                                                       # break the for loop and stop running more epochs
-        # except Exception as ex:
-        #     error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, run_type, run_numb, total_runs, ex.args)
-        #     if isinstance(ex, FloatingPointError):
-        #         printAndLog(input_to_write="Lowering the learning rate as the loss became nan or inf", logs=logs, postfix="\n")
-        #         config.SOLVER.BASE_LR = config.SOLVER.BASE_LR * FLAGS.lr_gamma
-        #     printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
+        except Exception as ex:
+            error_string = "An exception of type {} occured while doing {} {}/{}. Arguments:\n{!r}".format(type(ex).__name__, run_type, run_numb, total_runs, ex.args)
+            if isinstance(ex, FloatingPointError):
+                printAndLog(input_to_write="Lowering the learning rate as the loss became nan or inf", logs=logs, postfix="\n")
+                config.SOLVER.BASE_LR = config.SOLVER.BASE_LR * FLAGS.lr_gamma
+            printAndLog(input_to_write=error_string, logs=logs, prefix="", postfix="\n")
 
     # Evaluation on the vitrolife test dataset. There is no ADE20K-test dataset.
     test_history = {}                                                                                       # Initialize the test_history dictionary as an empty dictionary
