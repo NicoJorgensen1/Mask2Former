@@ -44,18 +44,17 @@ def object_func(trial):
     HPO_trial_start = time()
     new_best = float("nan")
     it_count = 0
-    new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=None, hyperparameter_optimization=True)
-    # while np.isnan(new_best):                                                                       # Sometimes the iteration fails for some reason. We'll allow 3 attempts before skipping and moving on
-    #     try:
-    #         new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=None, hyperparameter_optimization=True)
-    #     except Exception as ex:
-    #         error_str = "An exception of type {0} occured. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
-    #         printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
-    #         new_best = float("nan")
-    #     it_count += 1
-    #     if it_count >= 3:
-    #         printAndLog(input_to_write="", logs=log_file, print_str=False)
-    #         break 
+    while np.isnan(new_best):                                                                       # Sometimes the iteration fails for some reason. We'll allow 3 attempts before skipping and moving on
+        try:
+            new_best = objective_train_func(trial=trial, FLAGS=FLAGS, cfg=cfg, logs=log_file, data_batches=None, hyperparameter_optimization=True)
+        except Exception as ex:
+            error_str = "An exception of type {0} occured. Arguments:\n{1!r}".format(type(ex).__name__, ex.args)
+            printAndLog(input_to_write=error_str, logs=log_file, postfix="\n")
+            new_best = float("nan")
+        it_count += 1
+        if it_count >= 3:
+            printAndLog(input_to_write="", logs=log_file, print_str=False)
+            break 
     [os.remove(os.path.join(cfg.OUTPUT_DIR, x)) for x in os.listdir(cfg.OUTPUT_DIR) if all([x.endswith(".pth"), "model" in x.lower()])]
     [os.remove(os.path.join(cfg.OUTPUT_DIR, x)) for x in os.listdir(cfg.OUTPUT_DIR) if all([x.endswith(".json"), "metrics" in x.lower()])]
     [os.remove(os.path.join(cfg.OUTPUT_DIR, x)) for x in os.listdir(cfg.OUTPUT_DIR) if "events.out.tfevents" in x]
@@ -86,6 +85,7 @@ def perform_HPO():                                                              
         study.optimize(object_func, n_trials=FLAGS.num_trials, callbacks=[lambda study, trial: garb_collect.collect()], catch=(MemoryError,), gc_after_trial=True)
         trial = study.best_trial 
         best_params = trial.params 
+        FLAGS.best_params = deepcopy(best_params)
         save_dictionary(dictObject=best_params, save_folder=cfg.OUTPUT_DIR, dictName="best_HPO_params")
         printAndLog(input_to_write="Hyperparameter optimization completed.\nBest {:s}: {:.3f}".format(FLAGS.eval_metric, trial.value), logs=log_file, prefix="\n")
         printAndLog(input_to_write="Best hyperparameters: ".ljust(25), logs=log_file)
@@ -97,6 +97,7 @@ def perform_HPO():                                                              
         for hpo_trial in study.trials:
             if hpo_trial.values is None: continue
             if np.isnan(hpo_trial.values[-1]): continue
+            if np.isinf(hpo_trial.values[-1]): continue
             trials_list.append(hpo_trial)
             eval_metric_list.append(hpo_trial.values[-1])
         vals_to_keep = np.unique(np.argsort(eval_metric_list)[:5].tolist() + np.argsort(eval_metric_list)[-5:].tolist())
