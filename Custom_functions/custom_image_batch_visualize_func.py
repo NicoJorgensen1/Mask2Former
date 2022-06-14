@@ -343,6 +343,7 @@ def visualize_the_images(config, FLAGS, position=[0.55, 0.08, 0.40, 0.75], epoch
         fig.tight_layout()                                                                  # Assures the subplots are plotted tight around each other
         cbar = fig.colorbar(matplotlib.cm.ScalarMappable(norm=norm, cmap=thing_color_cmap), # Create a colorbar ... 
                 ax=axes.ravel().tolist(), orientation='vertical')                           # ... shared by all axes
+        cbar.ax.tick_params(labelsize=22)                                                   # Change fontsize on the color bar
         cbar.set_ticks(np.add(np.arange(0,len(class_names),1), 0.5))                        # Set the ticks in the middle of the discretized area
         cbar.set_ticklabels(class_names)                                                    # Let the ticklabels be the class names of the current color 
         fig.savefig(os.path.join(get_save_dirs(config=config, dataset_split=data_split), fig_name), bbox_inches="tight")    # Save the figure in the correct output directory

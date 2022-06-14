@@ -60,7 +60,7 @@ assert os.path.isdir(dataset_dir), "The dataset directory doesn't exist in the c
 
 testing_dir = os.path.join(Mask2Former_dir, "ade20k_outputs")
 Using_Vitrolife = False 
-using_predicted_images = False 
+using_predicted_images = False  
 if using_predicted_images:
     assert using_predicted_images != Using_Vitrolife, "We can't use predicted images when using Vitrolife images"
     endings = "out.jpg"

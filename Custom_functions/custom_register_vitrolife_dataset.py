@@ -19,7 +19,7 @@ from panopticapi.utils import id2rgb, rgb2id
 from detectron2.data.datasets import register_coco_panoptic
 
 # Create dictionary to store the class names and IDs 
-stuff_class_labels = {kk: val for kk,val in enumerate(["Background", "Well", "Zona", "Perivitelline space", "Cell"])}
+stuff_class_labels = {kk: val for kk,val in enumerate(["Background", "Well", "Zona", "Perivitelline space", "Cell", "PN"])}
 thing_class_labels = {kk: val for kk, val in enumerate(["PN"])}
 panoptic_class_labels = {kk+1: val for kk, val in enumerate(["Background", "Well", "Zona", "Perivitelline space", "Cell", "PN"])}
 
@@ -66,7 +66,8 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
     # Find the folder containing the vitrolife dataset  
     vitrolife_dataset_filepath = os.path.join(os.getenv("DETECTRON2_DATASETS"), "Vitrolife_dataset")    # Get the path to the vitrolife dataset
     dataset_dir_end_number = ""                                                                     # This is how it is normally, 
-    dataset_dir_end_number = "3"                                                                    # This is how it is temporarily while changing dataset folders while other scripts are running 
+    if "nico" not in vitrolife_dataset_filepath.lower():
+        dataset_dir_end_number = "3"                                                                # This is how it is temporarily while changing dataset folders while other scripts are running 
     
     # Find the metadata file
     metadata_file = os.path.join(vitrolife_dataset_filepath, "metadata.csv")                        # Get the csv file with the metadata for all images
@@ -197,7 +198,7 @@ def vitrolife_dataset_function(run_mode="train", debugging=False, visualize=Fals
         img_mask_pair_list.append(current_pair)                                                     # Append the dictionary for the current pair to the list of images for the given dataset
         count += 1                                                                                  # Increase the sample counter 
         if "nico" in vitrolife_dataset_filepath.lower():                                            # If we are working on my local computer ...
-            if count >= 20000:                                                                         # ... and 20 images have already been loaded ...
+            if count >= 15:                                                                         # ... and 20 images have already been loaded ...
                 break                                                                               # ... then that is enough, thus quit reading the rest of the images 
     assert len(img_mask_pair_list) >= 1, print("No image/mask pairs found in {:s} subfolders 'raw_image' and 'masks'".format(vitrolife_dataset_filepath))
     if debugging==True: img_mask_pair_list=pickSamplesWithUniquePN(img_mask_pair_list)              # If we are debugging, we'll only get one sample with each number of PN's 
@@ -213,14 +214,15 @@ def register_vitrolife_data_and_metadata_func(debugging=False, panoptic=False):
     thing_id = {kk+1: kk for kk in list(thing_class_labels.keys())}                                 # Get a dictionary of continuous keys
     stuff_colors = [(0,0,0), (255,0,0), (0,255,0), (0,0,255), (255,255,0), (185,220,255)]           # Set random colors for when the images will be visualized
     stuff_id = {kk: key for kk,key in enumerate(range(len(stuff_class_labels.keys())))}             # Create a dictionary with the class_id's as both keys and values
+    if panoptic:                                                                                    # If we are performing panoptic segmentation ...
+        thing_id, stuff_id = dict(), dict()                                                         # Initiate dictionaries to store the thing and stuff dictionaries 
+        for idx, (v, k) in enumerate(panoptic_class_labels.items()):                                # Iterate through the panoptic_class_labels dict
+            if "PN" in k.upper():                                                                   # If the current class is a PN (thus thing)
+                thing_id[idx] = v                                                                   # Then add the index and the class variable to the thing dictionary 
+            else:                                                                                   # If the current class is not a PN (thus stuff)
+                stuff_id[idx] = v                                                                   # Then add the index and the class index variable to the stuff dictionary 
     panoptic_colors = stuff_colors[:-1] + thing_colors 
-    panoptic_PN_count = 0
-    panoptic_id = dict()
-    for class_idx, class_label in enumerate(list(panoptic_class_labels.values())):
-        if "PN" in class_label.upper():
-            panoptic_PN_count += 1
-        panoptic_class_id = (class_idx+1) * 1000 + panoptic_PN_count 
-        panoptic_id[class_idx] = panoptic_class_id
+
     # For panoptic registration
     image_root = os.path.join(vitrolife_dataset_filepath, "raw_images")
     panoptic_root = os.path.join(vitrolife_dataset_filepath, "annotations_panoptic_masks")
@@ -276,14 +278,13 @@ def register_vitrolife_data_and_metadata_func(debugging=False, panoptic=False):
         # Set the metadata for the current dataset 
         MetadataCatalog.get("vitrolife_dataset_{:s}".format(split_mode)).set(thing_classes=list(thing_class_labels.values()),   # Name the thing classes
                                                                         thing_colors=thing_colors,                              # Color the thing classes
-                                                                        thing_dataset_id_to_contiguous_id=panoptic_id if panoptic else thing_id,    # Give ID's to the thing classes
+                                                                        thing_dataset_id_to_contiguous_id=thing_id,             # Give ID's to the thing classes
                                                                         stuff_classes=list(stuff_class_labels.values()),        # Get the semantic stuff classes
                                                                         stuff_colors = stuff_colors,                            # Set the metadata stuff_colors for visualization
                                                                         stuff_dataset_id_to_contiguous_id=stuff_id,             # Give the ID to the stuff classes 
                                                                         ignore_label=255,                                       # No labels will be ignored as 255 >> num_classes ...
                                                                         panoptic_classes = list(panoptic_class_labels.values()),# Get the panoptic class labels 
                                                                         panoptic_colors = panoptic_colors,                      # Get the panoptic colors for visualization
-                                                                        panoptic_dataset_id_to_contiguous_id = panoptic_id,     # Get the panoptic continuous IDs 
                                                                         panoptic_root = panoptic_root,                          # The folder path to the root of the panoptic RGB masks
                                                                         panoptic_json = reduced_panoptic_json_file_path,        # The filepath to the panoptic json 
                                                                         json_file = reduced_instance_json_file_path,            # The filepath to the instance json 
